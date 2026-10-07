@@ -13,16 +13,20 @@
     <a class="btn ghost" href="{{ url_for('admin.dashboard', w=next_week.isoformat(), secteur=secteur or '', sup=sup or '') }}">›</a>
   </div>
   <input type="hidden" name="w" value="{{ week.isoformat() }}">
-  <select name="secteur" onchange="this.form.submit()">
+  <select name="secteur" data-autosubmit>
     <option value="">Tous les secteurs</option>
     {% for s in secteurs %}<option {{ 'selected' if s == secteur }}>{{ s }}</option>{% endfor %}
   </select>
-  <select name="sup" onchange="this.form.submit()">
+  <select name="sup" data-autosubmit>
     <option value="">Tous les superviseurs</option>
     <option value="none" {{ 'selected' if sup == 'none' }}>— Non assignées —</option>
     {% for u in sups %}<option value="{{ u.id }}" {{ 'selected' if sup == u.id|string }}>{{ u.name }}</option>{% endfor %}
   </select>
-  <a class="btn primary" href="{{ url_for('admin.export', w=week.isoformat()) }}">⬇ Export Excel</a>
+  <div class="quick-export">
+    <a class="btn primary" href="{{ url_for('admin.export_download', mode='dernier', secteurs=secteur or '', sup=sup or '') }}" title="La dernière checklist de chaque station">⤓ Excel — dernier état</a>
+    <a class="btn ghost" href="{{ url_for('admin.export_download', mode='semaine', week=week.isoformat(), secteurs=secteur or '', sup=sup or '') }}">⤓ Cette semaine</a>
+    <a class="btn ghost" href="{{ url_for('admin.export') }}">Autre période…</a>
+  </div>
 </form>
 
 {% set k = d.kpi %}
@@ -56,13 +60,34 @@
   </section>
 
   <section class="card">
-    <h2>Par superviseur</h2>
+    <h2>Par superviseur <span class="muted small">— cette semaine</span></h2>
     <div class="table-wrap"><table class="tbl">
       <thead><tr><th>Superviseur</th><th>Faites</th><th>Complétion</th><th>Score</th></tr></thead>
       <tbody>
-      {% for name, g in d.by_sup %}
-        <tr><td>{{ name }}</td><td>{{ g.envoyees }}/{{ g.stations }}</td><td>{{ bar(g.completion) }}</td>
+      {% for name, sid, g in d.by_sup %}
+        {% set rl = d.relances.get(sid) %}
+        <tr><td>{{ name }}{% if rl %}<br><a class="btn tiny wa" target="_blank" rel="noopener" title="{{ rl.text }}"
+                href="https://wa.me/{{ rl.phone }}?text={{ rl.text | urlencode }}">Relancer ({{ rl.n }})</a>{% endif %}</td>
+          <td>{{ g.envoyees }}/{{ g.stations }}</td><td>{{ bar(g.completion) }}</td>
           <td class="sc {{ scorecls(g.score) }}">{{ pct(g.score) or '—' }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <p class="small muted">« Relancer » ouvre WhatsApp avec la liste des stations restantes (ajoutez le téléphone du superviseur dans sa fiche).</p>
+  </section>
+
+  {% set cw, ctable = d.compliance %}
+  <section class="card span2">
+    <h2>Régularité hebdomadaire <span class="muted small">— checklists envoyées / stations, 8 dernières semaines</span></h2>
+    <div class="table-wrap"><table class="tbl compliance">
+      <thead><tr><th>Superviseur</th>{% for w in cw %}<th>S{{ '%02d' % w.isocalendar()[1] }}</th>{% endfor %}</tr></thead>
+      <tbody>
+      {% for row in ctable %}
+        <tr><td>{{ row.name }}</td>
+        {% for done, tot in row.cells %}
+          {% set r = (done / tot) if tot else 0 %}
+          <td class="cc {{ 'ok' if r >= 1 else 'warn' if r >= 0.5 else 'crit' }}">{{ done }}/{{ tot }}</td>
+        {% endfor %}</tr>
       {% endfor %}
       </tbody>
     </table></div>

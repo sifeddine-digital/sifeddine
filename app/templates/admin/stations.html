@@ -7,9 +7,9 @@
   <a class="btn primary" href="{{ url_for('admin.station_edit') }}">+ Nouvelle station</a>
 </div>
 <form class="filters" method="get">
-  <select name="secteur" onchange="this.form.submit()"><option value="">Tous les secteurs</option>
+  <select name="secteur" data-autosubmit><option value="">Tous les secteurs</option>
     {% for s in secteurs %}<option {{ 'selected' if s == secteur }}>{{ s }}</option>{% endfor %}</select>
-  <select name="sup" onchange="this.form.submit()"><option value="">Tous les superviseurs</option>
+  <select name="sup" data-autosubmit><option value="">Tous les superviseurs</option>
     <option value="none" {{ 'selected' if sup == 'none' }}>— Non assignées —</option>
     {% for u in sups %}<option value="{{ u.id }}" {{ 'selected' if sup == u.id|string }}>{{ u.name }}</option>{% endfor %}</select>
   <input type="search" name="q" value="{{ q }}" placeholder="Nom, code, territoire…">

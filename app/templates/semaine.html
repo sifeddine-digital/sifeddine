@@ -1,53 +1,102 @@
 {% extends "base.html" %}
 {% block title %}Checklists — {{ week_label(week) }}{% endblock %}
 {% block content %}
+{% set admin = current_user().role == 'admin' %}
 <div class="pager">
-  <a class="btn ghost" href="{{ url_for('terrain.semaine', w=prev_week.isoformat()) }}" aria-label="Semaine précédente">‹</a>
+  <a class="btn ghost" href="{{ url_for('terrain.semaine', w=prev_week.isoformat(), secteur=secteur or '', sup=sup or '') }}" aria-label="Semaine précédente">‹</a>
   <div class="pager-label">
     <strong>{{ week_label(week) }}</strong>
-    {% if is_current %}<span class="tag">Semaine en cours</span>{% else %}<a class="small" href="{{ url_for('terrain.semaine') }}">Revenir à cette semaine</a>{% endif %}
+    {% if is_current %}<span class="tag">Semaine en cours</span>{% else %}<a class="small" href="{{ url_for('terrain.semaine', secteur=secteur or '', sup=sup or '') }}">Revenir à cette semaine</a>{% endif %}
   </div>
-  <a class="btn ghost" href="{{ url_for('terrain.semaine', w=next_week.isoformat()) }}" aria-label="Semaine suivante">›</a>
+  <a class="btn ghost" href="{{ url_for('terrain.semaine', w=next_week.isoformat(), secteur=secteur or '', sup=sup or '') }}" aria-label="Semaine suivante">›</a>
 </div>
 
-<div class="progress-card">
-  <div class="progress-head"><span>Checklists envoyées</span><strong>{{ done }} / {{ total }}</strong></div>
+{% if admin %}
+<form class="filters" method="get">
+  <input type="hidden" name="w" value="{{ week.isoformat() }}">
+  <select name="secteur" data-autosubmit>
+    <option value="">Tous les secteurs</option>
+    {% for s in secteurs %}<option {{ 'selected' if s == secteur }}>{{ s }}</option>{% endfor %}
+  </select>
+  <select name="sup" data-autosubmit>
+    <option value="">Tous les superviseurs</option>
+    <option value="none" {{ 'selected' if sup == 'none' }}>— Non assignées —</option>
+    {% for u in sups %}<option value="{{ u.id }}" {{ 'selected' if sup == u.id|string }}>{{ u.name }}</option>{% endfor %}
+  </select>
+</form>
+{% endif %}
+
+{# ---- rappel de la semaine : ce qui reste à faire et pour quand #}
+{% set remaining = total - done %}
+<div class="week-card {{ 'all-done' if total and not remaining else 'urgent' if is_current and days_left <= 1 and remaining else '' }}">
+  <div class="week-card-top">
+    <div>
+      <div class="wc-title">
+        {% if not total %}Aucune station
+        {% elif not remaining %}Semaine terminée ✔
+        {% else %}{{ remaining }} checklist{{ 's' if remaining > 1 }} à faire{% endif %}
+      </div>
+      <div class="wc-sub">
+        {% if is_current and remaining %}
+          Avant dimanche {{ deadline.strftime('%d/%m') }} ·
+          {% if days_left > 1 %}il reste {{ days_left }} jours{% elif days_left == 1 %}dernier jour demain{% else %}<strong>dernier jour aujourd'hui</strong>{% endif %}
+        {% elif not is_current and remaining and not editable_week %}Semaine clôturée
+        {% else %}{{ done }} / {{ total }} envoyée{{ 's' if done > 1 }}{% endif %}
+      </div>
+    </div>
+    <div class="wc-count"><strong>{{ done }}</strong>/{{ total }}</div>
+  </div>
   <div class="bar"><i style="width: {{ (done / total * 100) if total else 0 }}%"></i></div>
 </div>
 
+
+
 {% set todo = items | selectattr(1, 'none') | list %}
 {% set next = (items | rejectattr(1, 'none') | selectattr('1.status', 'ne', 'envoye') | list + todo) | first %}
-{% if next and total and done < total %}
+{% if next and remaining and editable_week %}
 <a class="continue" href="{{ url_for('terrain.checklist', station_id=next[0].id, week=week.isoformat()) }}">
-  <div>{{ 'Continuer' if next[1] else 'Prochaine station' }} : {{ next[0].name }}<small>{{ total - done }} station(s) restante(s) cette semaine</small></div>
+  <div>{{ 'Continuer' if next[1] else 'Commencer' }} : {{ next[0].name }}<small>{{ next[0].ship_to }} · {{ next[0].territoire }}</small></div>
   <span class="arrow">›</span>
 </a>
-{% elif total and done == total %}
-<div class="flash">Toutes vos checklists de la semaine sont envoyées ✔</div>
+{% endif %}
+
+{% if late and not admin %}
+<details class="late-card" {{ 'open' if late|length <= 3 }}>
+  <summary><strong>⚠ Semaine dernière : {{ late|length }} checklist{{ 's' if late|length > 1 }} non envoyée{{ 's' if late|length > 1 }}</strong>
+    <span class="small">À rattraper avant dimanche — {{ 'voir' if late|length > 3 else '' }}</span></summary>
+  {% for s, c in late %}
+  <a class="late-row" href="{{ url_for('terrain.checklist', station_id=s.id, week=prev_week.isoformat()) }}">
+    <span>{{ s.name }}</span><span class="pill {{ 'draft' if c else 'crit' }}">{{ 'Brouillon' if c else 'Rattraper' }} ›</span>
+  </a>
+  {% endfor %}
+</details>
 {% endif %}
 
 {% if not items %}
-  <div class="empty">Aucune station ne vous est affectée pour l'instant.<br>Contactez votre administrateur.</div>
+  <div class="empty">{% if admin %}Aucune station pour ce filtre.{% else %}Aucune station ne vous est affectée pour l'instant.<br>Contactez votre administrateur.{% endif %}</div>
 {% else %}
 <div class="filterchips" id="filterchips">
   <button type="button" class="on" data-show="all">Toutes · {{ total }}</button>
-  <button type="button" data-show="todo">À faire · {{ total - done }}</button>
+  <button type="button" data-show="todo">À faire · {{ remaining }}</button>
   <button type="button" data-show="done">Envoyées · {{ done }}</button>
 </div>
 <input class="search" type="search" placeholder="Rechercher une station…" data-filter=".station-list li">
+<p class="legend-dots small muted">4 semaines précédentes :
+  <i class="d ok"></i>conforme <i class="d warn"></i>à corriger <i class="d crit"></i>critique <i class="d miss"></i>non faite</p>
 {% set ns = namespace(sect=None) %}
 <ul class="station-list">
-{% for s, c in items %}
+{% for s, c, dots in items %}
   {% if s.secteur != ns.sect %}{% set ns.sect = s.secteur %}<li class="group">{{ s.secteur }}</li>{% endif %}
-  <li data-text="{{ (s.name ~ ' ' ~ s.ship_to ~ ' ' ~ s.territoire) | lower }}" data-state="{{ 'done' if c and c.status == 'envoye' else 'todo' }}">
-    <a href="{{ url_for('terrain.checklist', station_id=s.id, week=week.isoformat()) }}">
-      <div>
+  <li data-text="{{ (s.name ~ ' ' ~ s.ship_to ~ ' ' ~ s.territoire ~ ' ' ~ (s.sup_name or '')) | lower }}" data-state="{{ 'done' if c and c.status == 'envoye' else 'todo' }}">
+    <a href="{{ url_for('terrain.checklist', station_id=s.id, week=week.isoformat()) }}" class="{{ 'is-done' if c and c.status == 'envoye' }}">
+      <div class="st-main">
         <div class="st-name">{{ s.name }}</div>
-        <div class="muted small">{{ s.ship_to }} · {{ s.territoire }}{% if s.sup_name %} · {{ s.sup_name }}{% endif %}</div>
+        <div class="muted small">{{ s.ship_to }} · {{ s.territoire }}{% if s.sup_name %} · {{ s.sup_name }}{% elif admin %} · <em>non assignée</em>{% endif %}</div>
+        <div class="dots">{% for w, st in dots %}<i class="d {{ st }}" title="S{{ '%02d' % w.isocalendar()[1] }}"></i>{% endfor %}</div>
       </div>
       <div class="st-status">
         {% if c and c.status == 'envoye' %}
-          <span class="pill {{ 'crit' if c.statut == 'Critique' else 'warn' if c.statut == 'À corriger' else 'ok' }}">{{ pct(c.score_global) or '—' }}</span>
+          <span class="pill {{ 'crit' if c.statut == 'Critique' else 'warn' if c.statut == 'À corriger' else 'ok' }}">✓ {{ pct(c.score_global) or '—' }}</span>
           <span class="small muted">{{ c.statut }}</span>
         {% elif c %}
           <span class="pill draft">Brouillon</span>

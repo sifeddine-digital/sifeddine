@@ -1,27 +1,60 @@
 {% extends "base.html" %}
 {% block title %}Export Excel{% endblock %}
+{% block main_class %}wrap mid{% endblock %}
 {% block content %}
 <h1>Export Excel</h1>
-<div class="card narrow">
-  <p>Le fichier reprend la mise en page de la fiche (onglets <em>Checklist</em>, <em>Invt_Eqmt</em>, <em>Invt_Stck</em> avec formules,
-  couleurs et listes déroulantes) et ajoute :</p>
-  <ul class="small">
-    <li><strong>Dashboard</strong> : KPI, tableau par secteur et par superviseur, taux de « Non » par point, dotation équipements, fiabilité stock, 4 graphiques ;</li>
-    <li><strong>Historique</strong> : toutes les stations × semaines (scores par bloc, statut, état envoyée / brouillon / non faite) ;</li>
-    <li><strong>Plan d'actions</strong> : chaque bloc en « Non » avec constat, action, responsable et une colonne de suivi.</li>
-  </ul>
-  <form method="post">
-    <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <label>Semaine
-      <select name="week">
-        {% for w in weeks %}<option value="{{ w.isoformat() }}" {{ 'selected' if current == w.isoformat() }}>{{ week_label(w) }}</option>{% endfor %}
-      </select></label>
-    <label>Historique sur
-      <select name="weeks">{% for n in (4, 8, 12, 26, 52) %}<option value="{{ n }}" {{ 'selected' if n == 8 }}>{{ n }} semaines</option>{% endfor %}</select></label>
-    <fieldset class="assign"><legend><label class="check"><input type="checkbox" checked data-check-group="1"> <strong>Secteurs</strong></label></legend>
-      <ul>{% for s in secteurs %}<li><label class="check"><input type="checkbox" name="secteurs" value="{{ s }}" checked> {{ s }}</label></li>{% endfor %}</ul>
-    </fieldset>
-    <button class="btn primary block">⬇ Télécharger le fichier Excel</button>
-  </form>
+<p class="muted">Même présentation que la fiche (Checklist, Invt_Eqmt, Invt_Stck) + Dashboard avec graphiques, Historique et Plan d'actions.</p>
+
+<div class="export-quick">
+  <a class="export-tile primary" href="{{ url_for('admin.export_download', mode='dernier') }}">
+    <strong>⤓ Dernier état</strong>
+    <span>La dernière checklist envoyée de chacune des {{ n_stations }} stations, quelle que soit la semaine.</span>
+  </a>
+  <a class="export-tile" href="{{ url_for('admin.export_download', mode='semaine', week=weeks[0].isoformat()) }}">
+    <strong>⤓ Cette semaine</strong>
+    <span>{{ week_label(weeks[0]) }}</span>
+  </a>
+  <a class="export-tile" href="{{ url_for('admin.export_download', mode='semaine', week=weeks[1].isoformat()) }}">
+    <strong>⤓ Semaine dernière</strong>
+    <span>{{ week_label(weeks[1]) }}</span>
+  </a>
 </div>
+
+<form method="get" action="{{ url_for('admin.export_download') }}" class="card export-form" id="exportform">
+  <h2>Export personnalisé</h2>
+  <fieldset class="modes">
+    <label class="mode"><input type="radio" name="mode" value="dernier" checked>
+      <span><strong>Dernier état</strong><small>la dernière checklist de chaque station</small></span></label>
+    <label class="mode"><input type="radio" name="mode" value="semaine">
+      <span><strong>Une semaine</strong><small>exactement la semaine choisie</small></span></label>
+    <label class="mode"><input type="radio" name="mode" value="periode">
+      <span><strong>Une période</strong><small>du … au … (dernière checklist de chaque station sur la période)</small></span></label>
+  </fieldset>
+
+  <div class="mode-opt" data-for="semaine">
+    <label>Semaine
+      <select name="week">{% for w in weeks %}<option value="{{ w.isoformat() }}">{{ week_label(w) }}</option>{% endfor %}</select></label>
+  </div>
+  <div class="mode-opt grid2" data-for="periode">
+    <label>Du
+      <select name="from">{% for w in weeks %}<option value="{{ w.isoformat() }}" {{ 'selected' if loop.index == 4 }}>{{ week_label(w) }}</option>{% endfor %}</select></label>
+    <label>Au
+      <select name="to">{% for w in weeks %}<option value="{{ w.isoformat() }}">{{ week_label(w) }}</option>{% endfor %}</select></label>
+  </div>
+  <div class="mode-opt" data-for="dernier semaine">
+    <label>Onglet Historique sur
+      <select name="weeks">{% for n in (4, 8, 12, 26, 52) %}<option value="{{ n }}" {{ 'selected' if n == 8 }}>{{ n }} semaines</option>{% endfor %}</select></label>
+  </div>
+
+  <div class="grid2">
+    <label>Superviseur
+      <select name="sup"><option value="">Tous</option><option value="none">— Stations non assignées —</option>
+        {% for u in sups %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}</select></label>
+    <div></div>
+  </div>
+  <fieldset class="assign"><legend><label class="check"><input type="checkbox" checked data-check-group="1"> <strong>Secteurs</strong></label></legend>
+    <ul>{% for s in secteurs %}<li><label class="check"><input type="checkbox" name="secteurs" value="{{ s }}" checked> {{ s }}</label></li>{% endfor %}</ul>
+  </fieldset>
+  <button class="btn primary block">⤓ Télécharger le fichier Excel</button>
+</form>
 {% endblock %}

@@ -1,15 +1,25 @@
 {% extends "base.html" %}
 {% block title %}Mon compte{% endblock %}
 {% block content %}
-<h1>Mon compte</h1>
+<h1>{{ 'Choisissez votre mot de passe' if must_change else 'Mon compte' }}</h1>
 <div class="card narrow">
+  {% if must_change %}
+  <div class="flash info">Bienvenue {{ current_user().name }} ! Pour sécuriser votre compte, remplacez le mot de passe reçu par un mot de passe personnel (8 caractères minimum).</div>
+  {% else %}
   <p><strong>{{ current_user().name }}</strong><br><span class="muted">{{ current_user().email }}</span></p>
+  {% endif %}
   <form method="post">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <label>Mot de passe actuel <input type="password" name="old" autocomplete="current-password" required></label>
+    <label>{{ 'Mot de passe reçu' if must_change else 'Mot de passe actuel' }} <input type="password" name="old" autocomplete="current-password" required></label>
     <label>Nouveau mot de passe (8 caractères min.) <input type="password" name="new" autocomplete="new-password" minlength="8" required></label>
     <label>Confirmer <input type="password" name="confirm" autocomplete="new-password" minlength="8" required></label>
     <button class="btn primary block">Enregistrer</button>
   </form>
+  {% if must_change %}
+  <form method="post" action="{{ url_for('auth.logout') }}" class="center-link">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <button class="linkish">Se déconnecter</button>
+  </form>
+  {% endif %}
 </div>
 {% endblock %}

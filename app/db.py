@@ -73,7 +73,20 @@ CREATE TABLE IF NOT EXISTS stocks (
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_checklists_week ON checklists(week_start);
 CREATE INDEX IF NOT EXISTS idx_stations_sup ON stations(supervisor_id);
+CREATE TABLE IF NOT EXISTS journal (
+    id INTEGER PRIMARY KEY,
+    ts TEXT NOT NULL DEFAULT (datetime('now')),
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    action TEXT NOT NULL,
+    detail TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_journal_ts ON journal(ts);
 """
+
+# Colonnes ajoutées après la première version : (table, colonne, définition).
+MIGRATIONS = [
+    ("users", "must_change", "INTEGER NOT NULL DEFAULT 0"),
+]
 
 
 def get_db():
@@ -93,8 +106,19 @@ def close_db(_exc=None):
 def init_db():
     db = get_db()
     db.executescript(SCHEMA)
+    for table, col, ddl in MIGRATIONS:
+        if col not in {r["name"] for r in db.execute(f"PRAGMA table_info({table})")}:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
     db.execute("PRAGMA journal_mode = WAL")
     db.commit()
+
+
+def log(action, detail="", user_id=None):
+    """Journal des actions sensibles (connexions, envois, affectations, exports…)."""
+    if user_id is None:
+        user = getattr(g, "user", None)
+        user_id = user["id"] if user else None
+    execute("INSERT INTO journal(user_id, action, detail) VALUES (?, ?, ?)", (user_id, action, str(detail)[:500]))
 
 
 def query(sql, args=(), one=False):

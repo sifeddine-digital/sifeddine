@@ -6,6 +6,7 @@ import json
 from openpyxl import Workbook
 from openpyxl.chart import BarChart, DoughnutChart, LineChart, Reference
 from openpyxl.chart.label import DataLabelList
+from openpyxl.cell.rich_text import CellRichText
 from openpyxl.chart.series import DataPoint
 from openpyxl.formatting.rule import CellIsRule, ColorScaleRule, DataBarRule, FormulaRule
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -17,7 +18,7 @@ from .db import query, seuils
 from .referentiel import (BLOC_NOMS_COURTS, BLOCS, E1_AIDE, E2_AIDE, ELIMINATOIRES, EQUIPEMENTS,
                           EQUIPEMENT_LIBELLES, LIBELLES, STATUTS_RELEVE, STOCK_FREQUENCES,
                           STOCK_METHODES, TOUS_LES_POINTS)
-from .stats import filtered_stations, summarize, week_rows
+from .stats import filtered_stations, latest_rows, summarize, week_rows
 
 FONT = "Urbanist SemiBold"
 THIN = Side(style="thin", color="FFBFBFBF")
@@ -62,10 +63,36 @@ def ship_value(s):
 
 
 # =================================================================== builder
-def build_workbook(week, secteurs, n_weeks=8):
-    stations = [s for s in filtered_stations() if s["secteur"] in secteurs]
-    rows = week_rows(week, stations)
-    month = scoring.month_start(week)
+MODES = {
+    "dernier": "Dernier état de chaque station",
+    "semaine": "Semaine",
+    "periode": "Période",
+}
+
+
+def export_plan(mode, week=None, week_from=None, week_to=None, n_weeks=8):
+    """(du, au, semaines de l'historique, libellé) selon le mode d'export choisi."""
+    current = scoring.week_start()
+    if mode == "semaine":
+        week = week or current
+        return week, week, [week - dt.timedelta(days=7 * i) for i in range(n_weeks - 1, -1, -1)], \
+            scoring.week_label(week)
+    if mode == "periode":
+        a, b = sorted([week_from or current, week_to or current])
+        weeks, w = [], a
+        while w <= b and len(weeks) < 104:
+            weeks.append(w)
+            w += dt.timedelta(days=7)
+        return a, b, weeks, f"Du {a:%d/%m/%Y} au {b + dt.timedelta(days=6):%d/%m/%Y} (dernière checklist de chaque station)"
+    return None, current, [current - dt.timedelta(days=7 * i) for i in range(n_weeks - 1, -1, -1)], \
+        f"Dernier état de chaque station au {dt.date.today():%d/%m/%Y}"
+
+
+def build_workbook(mode="dernier", secteurs=None, sup=None, week=None, week_from=None, week_to=None, n_weeks=8):
+    stations = [s for s in filtered_stations(sup_id=sup) if not secteurs or s["secteur"] in secteurs]
+    w_from, w_to, hist_weeks, label = export_plan(mode, week, week_from, week_to, n_weeks)
+    rows = latest_rows(stations, w_from, w_to)
+    month = scoring.month_start(w_to + dt.timedelta(days=6))
     seuil_bloc, seuil_global = seuils()
 
     wb = Workbook()
@@ -74,15 +101,37 @@ def build_workbook(week, secteurs, n_weeks=8):
     eq_last = _sheet_inventaire(wb.create_sheet("Invt_Eqmt"), stations, month)
     ck_last = _sheet_checklist(wb.create_sheet("Checklist", 1), rows, eq_last, seuil_bloc, seuil_global)
     _sheet_stock(wb.create_sheet("Invt_Stck"), stations, month)
-    trend = _sheet_historique(wb.create_sheet("Historique"), stations, week, n_weeks, seuil_bloc, seuil_global)
+    trend = _sheet_historique(wb.create_sheet("Historique"), stations, hist_weeks, seuil_bloc)
     _sheet_actions(wb.create_sheet("Plan d'actions"), rows)
-    _sheet_dashboard(dash, week, secteurs, rows, trend, ck_last, eq_last, len(stations))
+    _sheet_dashboard(dash, label, month, sorted({s["secteur"] for s in stations}), rows, trend, ck_last, eq_last,
+                     len(stations))
+    _neutralize_user_formulas(wb, stations, rows)
 
-    wb.properties.title = f"LOS Checklist — {scoring.week_label(week)}"
+    wb.properties.title = f"LOS Checklist — {label}"
     wb.properties.creator = "LOS Checklist"
     for ws in wb.worksheets:
         ws.sheet_view.zoomScale = 90
     return wb
+
+
+def _neutralize_user_formulas(wb, stations, rows):
+    """Un texte saisi qui commence par « = » ne doit jamais devenir une formule Excel (injection)."""
+    texts = set()
+    for s in stations:
+        texts.update(str(s[k] or "") for k in ("name", "secteur", "territoire", "ship_to", "sup_name"))
+    for _, _, d, _ in rows:
+        if d:
+            texts.update(str(v) for part in ("constats", "actions") for v in d.get(part, {}).values())
+            texts.update(str(d.get(k) or "") for k in ("responsable", "commentaire"))
+    texts.update(r["commentaire"] or "" for r in query("SELECT commentaire FROM stocks"))
+    texts = {t for t in texts if t.startswith("=")}
+    if not texts:
+        return
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if cell.data_type == "f" and cell.value in texts:
+                    cell.value = CellRichText([cell.value])
 
 
 # ================================================================ Checklist
@@ -275,9 +324,12 @@ def _d(s):
 
 # =============================================================== Invt_Eqmt
 def _sheet_inventaire(ws, stations, month):
-    inv = {r["station_id"]: r for r in query("SELECT * FROM inventaires WHERE month = ?", (month.isoformat(),))}
+    inv = {r["station_id"]: r for r in query(
+        "SELECT i.* FROM inventaires i JOIN (SELECT station_id, MAX(month) AS m FROM inventaires WHERE month <= ? "
+        "GROUP BY station_id) x ON x.station_id = i.station_id AND x.m = i.month", (month.isoformat(),))}
+    shown = max((dt.date.fromisoformat(r["month"]) for r in inv.values()), default=month)
     style(ws.cell(1, 1, "Mois concerné :"), bold=True, border=False, align=LEFT)
-    style(ws.cell(1, 2, month), bold=True, bg="FFFFFF00", fmt="mmm-yy", border=False, align=LEFT)
+    style(ws.cell(1, 2, shown), bold=True, bg="FFFFFF00", fmt="mmm-yy", border=False, align=LEFT)
     style(ws.cell(2, 1, "Saisie mensuelle — la colonne « Statut relevé » explique les stations non relevées."),
           color="FF666666", border=False, align=Alignment(horizontal="left"))
     for c, t in ((5, "SUIVI"), (6, "PRÉREQUIS"), (7, "TYPE")):
@@ -332,9 +384,12 @@ def _sheet_inventaire(ws, stations, month):
 
 # =============================================================== Invt_Stck
 def _sheet_stock(ws, stations, month):
-    stk = {r["station_id"]: r for r in query("SELECT * FROM stocks WHERE month = ?", (month.isoformat(),))}
+    stk = {r["station_id"]: r for r in query(
+        "SELECT i.* FROM stocks i JOIN (SELECT station_id, MAX(month) AS m FROM stocks WHERE month <= ? "
+        "GROUP BY station_id) x ON x.station_id = i.station_id AND x.m = i.month", (month.isoformat(),))}
+    shown = max((dt.date.fromisoformat(r["month"]) for r in stk.values()), default=month)
     style(ws.cell(1, 1, "Mois concerné :"), bold=True, border=False, align=LEFT)
-    style(ws.cell(1, 2, month), bold=True, bg="FFFFFF00", fmt="mmm-yy", border=False, align=LEFT)
+    style(ws.cell(1, 2, shown), bold=True, bg="FFFFFF00", fmt="mmm-yy", border=False, align=LEFT)
     style(ws.cell(2, 1, "Critère : « Stock fiable = Oui » signifie que le stock physique constaté correspond au stock "
                         "système (écart toléré ≤ 5 %). Saisir les deux volumes en colonnes I et J : l'écart se calcule "
                         "tout seul. Commentaire obligatoire si « Non », « Refus » ou « Aucun inventaire »."),
@@ -376,7 +431,7 @@ def _sheet_stock(ws, stations, month):
 
 
 # ============================================================== Historique
-def _sheet_historique(ws, stations, week, n_weeks, seuil_bloc, seuil_global):
+def _sheet_historique(ws, stations, weeks, seuil_bloc):
     headers = ["Semaine", "Lundi", "Secteur", "Territoire", "Code Ship-to", "Station", "Superviseur", "État",
                "Date de visite"] + [f"% {BLOC_NOMS_COURTS[c]}" for c, _, _ in BLOCS] + \
               ["Nb Oui", "Nb Non", "% global", "Statut global"]
@@ -385,8 +440,7 @@ def _sheet_historique(ws, stations, week, n_weeks, seuil_bloc, seuil_global):
     ws.row_dimensions[1].height = 32
     r = 2
     trend = []
-    for i in range(n_weeks - 1, -1, -1):
-        w = week - dt.timedelta(days=7 * i)
+    for w in weeks:
         rows = week_rows(w, stations)
         trend.append((w, summarize(rows)))
         iso = w.isocalendar()
@@ -465,7 +519,7 @@ def _sheet_actions(ws, rows):
 
 
 # =============================================================== Dashboard
-def _sheet_dashboard(ws, week, secteurs, rows, trend, ck_last, eq_last, n_stations):
+def _sheet_dashboard(ws, label, month, secteurs, rows, trend, ck_last, eq_last, n_stations):
     ws.sheet_view.showGridLines = False
     navy, green = "FF1F4E79", "FF1F4E23"
     ck = lambda col: f"Checklist!${col}$3:${col}${ck_last}"  # noqa: E731
@@ -479,7 +533,7 @@ def _sheet_dashboard(ws, week, secteurs, rows, trend, ck_last, eq_last, n_statio
     ws.row_dimensions[1].height = 34
     ws.merge_cells("A2:N2")
     style(ws["A2"], color="FF404040", border=False, align=Alignment(horizontal="left", indent=1)).value = (
-        f"{scoring.week_label(week)}   ·   Inventaire & stock : {scoring.month_label(scoring.month_start(week))}"
+        f"{label}   ·   Inventaire & stock : dernier relevé à fin {scoring.month_label(month)}"
         f"   ·   Secteurs : {', '.join(secteurs)}   ·   Généré le {dt.datetime.now():%d/%m/%Y %H:%M}")
 
     # ---- KPI (formules liées à l'onglet Checklist)
@@ -507,7 +561,7 @@ def _sheet_dashboard(ws, week, secteurs, rows, trend, ck_last, eq_last, n_statio
     for i, h in enumerate(heads, 1):
         style(ws.cell(r0, i, h), bold=True, bg="FFD9D9D9")
     ws.row_dimensions[r0].height = 30
-    sect_list = sorted({s["secteur"] for s, *_ in rows})
+    sect_list = secteurs
     for j, sect in enumerate(sect_list, r0 + 1):
         a = f"$A{j}"
         vals = [sect, f"=COUNTIF({ck('A')},{a})", f'=COUNTIFS({ck("A")},{a},{ck(G)},">=0")',
@@ -534,7 +588,7 @@ def _sheet_dashboard(ws, week, secteurs, rows, trend, ck_last, eq_last, n_statio
 
     # ---- par superviseur (valeurs)
     r = tot + 3
-    _section(ws, r - 1, "PAR SUPERVISEUR (semaine)", 14, green)
+    _section(ws, r - 1, "PAR SUPERVISEUR", 14, green)
     for i, h in enumerate(["Superviseur", "Stations", "Envoyées", "Complétion", "Score moyen", "Brouillons",
                            "Critique", "À corriger", "Conforme"], 1):
         style(ws.cell(r, i, h), bold=True, bg="FFD9D9D9")
