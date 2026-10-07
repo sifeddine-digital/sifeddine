@@ -1,82 +1,89 @@
 # Mise en ligne sur un VPS
 
-Ce guide installe LOS Checklist sur un serveur Linux (Ubuntu 22.04 ou 24.04) avec :
+L'application tourne dans Docker, derrière **Caddy** qui obtient et renouvelle seul le certificat HTTPS (Let's Encrypt).
+Une sauvegarde de la base est faite chaque nuit.
 
-- l'application dans un conteneur Docker (gunicorn, 2 processus) ;
-- **Caddy** devant, qui obtient et renouvelle tout seul le certificat HTTPS (Let's Encrypt) ;
-- une **sauvegarde quotidienne** de la base de données.
+## Ce qu'il faut
 
-Il faut : un VPS (1 vCPU / 1 Go de RAM suffisent), un nom de domaine ou sous-domaine
-(ex. `checklist.mondomaine.ma`) dont l'enregistrement **A** pointe vers l'IP du VPS, et les ports 80 et 443 ouverts.
+- Un VPS **Ubuntu 22.04 ou 24.04** (Debian marche aussi) : 1 vCPU et 1 Go de RAM suffisent.
+- Un **nom de domaine** ou sous-domaine (ex. `checklist.mondomaine.ma`) avec un enregistrement **A** qui pointe vers l'IP du VPS.
+  À faire chez le fournisseur du domaine, de préférence avant l'installation (la propagation peut prendre quelques minutes).
+- Les ports **80 et 443** ouverts (pare-feu de l'hébergeur s'il y en a un).
 
-## 1. Préparer le serveur
+## 1. Installer (une seule commande)
 
-```bash
-sudo apt update && sudo apt -y upgrade
-curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker $USER      # puis se déconnecter / reconnecter
-sudo ufw allow OpenSSH && sudo ufw allow 80 && sudo ufw allow 443 && sudo ufw --force enable
-```
-
-## 2. Récupérer l'application
+Se connecter au VPS depuis le PC. Sous Windows : ouvrir **Terminal** (ou PowerShell) et taper :
 
 ```bash
-git clone https://github.com/sifeddine-digital/sifeddine.git los-checklist
-cd los-checklist/deploy
-cp .env.exemple .env
-nano .env
+ssh root@ADRESSE_IP_DU_VPS
 ```
 
-Dans `.env` :
+Puis, sur le VPS :
 
-| Variable | Valeur |
+```bash
+curl -fsSL https://raw.githubusercontent.com/sifeddine-digital/sifeddine/main/deploy/install.sh | sudo bash
+```
+
+Le script pose trois questions : le **domaine**, l'**email** et le **mot de passe** de l'administrateur
+(le mot de passe ne s'affiche pas pendant la frappe, c'est normal). Il installe ensuite Docker, l'application dans
+`/opt/los-checklist`, démarre le tout, programme la sauvegarde de 2 h du matin et vérifie le HTTPS.
+
+À la fin, ouvrir `https://le-domaine`, se connecter, puis menu **Importer la fiche Excel**.
+
+Le script signale lui-même un domaine qui ne pointe pas encore vers le VPS : dans ce cas, corriger l'enregistrement A.
+Le HTTPS s'active tout seul ensuite, sans rien relancer.
+
+## 2. Reprendre les données saisies sur le PC (facultatif)
+
+1. Sur le PC, dans l'application : menu **Sauvegarder les données**. Un fichier `LOS_sauvegarde_….sqlite3` est téléchargé.
+2. L'envoyer sur le VPS, depuis le Terminal du PC (dossier Téléchargements) :
+   ```bash
+   scp LOS_sauvegarde_2026-10-07_1830.sqlite3 root@ADRESSE_IP_DU_VPS:/root/
+   ```
+3. Sur le VPS :
+   ```bash
+   cd /opt/los-checklist/deploy
+   ./restaurer.sh /root/LOS_sauvegarde_2026-10-07_1830.sqlite3
+   ```
+
+La base du VPS est remplacée par celle du PC : on se connecte alors avec les **comptes du PC**. Le compte admin créé
+pendant l'installation disparaît avec l'ancienne base ; une copie de celle-ci est gardée dans `sauvegardes/`.
+
+## 3. Au quotidien
+
+Toutes les commandes se lancent dans `/opt/los-checklist/deploy` (`cd /opt/los-checklist/deploy`).
+
+| Besoin | Commande |
 |---|---|
-| `DOMAINE` | le domaine, ex. `checklist.mondomaine.ma` |
-| `SECRET_KEY` | une longue chaîne aléatoire : `openssl rand -hex 32` |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | le premier compte administrateur (8 caractères minimum) |
+| Mettre à jour l'application | relancer la commande d'installation (les données ne sont pas touchées) |
+| Sauvegarder maintenant | `./sauvegarde.sh` |
+| Voir les sauvegardes | `ls -lh sauvegardes/` (les 30 dernières sont gardées) |
+| Restaurer une sauvegarde | `./restaurer.sh sauvegardes/los_AAAA-MM-JJ_HHMMSS.sqlite3` |
+| État des services | `docker compose ps` (les 2 services doivent être *running*) |
+| Erreurs de l'application | `docker compose logs --tail 100 app` |
+| Créer ou réinitialiser un admin | `docker compose exec app flask --app wsgi create-admin` |
 
-## 3. Démarrer
-
-```bash
-docker compose up -d --build
-docker compose logs -f app        # « Booting worker » = l'application tourne (Ctrl+C pour quitter)
-```
-
-Ouvrir `https://checklist.mondomaine.ma`, se connecter avec `ADMIN_EMAIL` / `ADMIN_PASSWORD`,
-puis **Importer la fiche Excel** depuis le menu.
-
-## 4. Sauvegarde automatique (tous les jours à 2 h)
-
-```bash
-crontab -e
-# ajouter la ligne (adapter le chemin) :
-0 2 * * * /home/ubuntu/los-checklist/deploy/sauvegarde.sh >> /home/ubuntu/los-checklist/deploy/sauvegarde.log 2>&1
-```
-
-Les copies sont dans `deploy/sauvegardes/` (30 dernières gardées). Penser à en récupérer une de temps en temps
-sur un autre support. Depuis l'application, l'admin peut aussi télécharger une copie : menu **Sauvegarder les données**.
-
-**Restaurer** une sauvegarde :
-
-```bash
-docker compose cp sauvegardes/los_AAAA-MM-JJ_HHMM.sqlite3 app:/data/los.sqlite3
-docker compose restart app
-```
-
-## 5. Mettre à jour l'application
-
-```bash
-cd ~/los-checklist && git pull
-cd deploy && docker compose up -d --build
-```
-
-Les données (volume `los-data`) ne sont pas touchées par une mise à jour.
+Penser à récupérer de temps en temps une sauvegarde hors du serveur : depuis l'application (menu **Sauvegarder les données**),
+ou depuis le PC avec `scp root@ADRESSE_IP_DU_VPS:/opt/los-checklist/deploy/sauvegardes/los_*.sqlite3 .`
 
 ## Dépannage
 
 | Symptôme | Vérification |
 |---|---|
-| Le site ne répond pas | `docker compose ps` (les 2 services doivent être *running*), `docker compose logs app` |
-| Pas de HTTPS / erreur de certificat | le domaine pointe-t-il vers l'IP du VPS ? ports 80/443 ouverts ? `docker compose logs caddy` |
-| Admin bloqué (mot de passe oublié) | `docker compose exec app flask --app wsgi create-admin` (crée ou réinitialise un admin) |
-| « Internal Server Error » | `docker compose logs app --tail 100` : la dernière erreur Python y est affichée |
+| Le site ne répond pas | `docker compose ps`, puis `docker compose logs --tail 100 app` |
+| Pas de HTTPS / erreur de certificat | le domaine pointe-t-il vers l'IP du VPS (`getent hosts le-domaine`) ? Ports 80/443 ouverts ? `docker compose logs --tail 50 caddy` |
+| « Internal Server Error » | `docker compose logs --tail 100 app` : la dernière erreur Python y est affichée |
+| Admin bloqué (mot de passe oublié) | `docker compose exec app flask --app wsgi create-admin` |
+| « Trop de tentatives » à la connexion | attendre 15 minutes (8 essais ratés), ou réinitialiser le mot de passe |
+
+## Installation manuelle (sans le script)
+
+```bash
+curl -fsSL https://get.docker.com | sudo sh
+sudo git clone --branch main https://github.com/sifeddine-digital/sifeddine.git /opt/los-checklist
+cd /opt/los-checklist/deploy
+sudo cp .env.exemple .env && sudo chmod 600 .env
+sudo nano .env        # DOMAINE, SECRET_KEY (openssl rand -hex 32), ADMIN_EMAIL, ADMIN_PASSWORD
+sudo docker compose up -d --build
+echo "0 2 * * * root /opt/los-checklist/deploy/sauvegarde.sh >> /opt/los-checklist/deploy/sauvegarde.log 2>&1" | sudo tee /etc/cron.d/los-checklist
+```
