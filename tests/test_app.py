@@ -7,7 +7,7 @@ import pytest
 from werkzeug.security import generate_password_hash
 
 from app import create_app, scoring
-from app.db import execute, query
+from app.db import execute, init_db, query
 from app.referentiel import TOUS_LES_POINTS
 
 
@@ -120,7 +120,7 @@ def test_supervisor_sees_only_assigned_and_cannot_reach_admin(app):
     page = c.get("/semaine").get_data(as_text=True)
     assert "SHELL A" in page and "SHELL B" not in page
     assert c.get(f"/checklist/2/{scoring.week_start()}").status_code == 403
-    for path in ("/admin/", "/admin/export", "/admin/export/telecharger", "/admin/sauvegarde", "/admin/journal"):
+    for path in ("/admin/", "/admin/export", "/admin/export/telecharger", "/admin/sauvegarde"):
         assert c.get(path).status_code == 403, path
 
 
@@ -136,7 +136,6 @@ def test_send_checklist_requires_constat_when_non(app):
     with app.app_context():
         row = query("SELECT * FROM checklists WHERE station_id = 1", one=True)
         assert row["status"] == "envoye" and row["statut"] == "À corriger"  # Propreté 2/3 < 70 %
-        assert query("SELECT 1 FROM journal WHERE action = 'checklist envoyée'", one=True)
 
 
 def test_old_week_is_read_only_for_supervisor(app):
@@ -176,8 +175,16 @@ def test_admin_assigns_stations_and_dashboard(app):
     page = c.get("/admin/").get_data(as_text=True)
     assert "sr-strip" in page and "Avancement de la semaine" in page
     assert "https://wa.me/212612345678?text=" in page  # relance WhatsApp
-    assert c.get("/admin/journal").status_code == 200
+    assert c.get("/admin/journal").status_code == 404  # journal d'activité retiré
 
+
+
+def test_old_activity_journal_is_removed(app):
+    with app.app_context():  # base d'une version précédente : la table du journal (avec les IP) est supprimée
+        execute("CREATE TABLE IF NOT EXISTS journal (id INTEGER PRIMARY KEY, action TEXT, detail TEXT)")
+        execute("INSERT INTO journal(action, detail) VALUES ('connexion', '192.168.1.20')")
+        init_db()
+        assert query("SELECT 1 FROM sqlite_master WHERE name = 'journal'", one=True) is None
 
 def export(c, **params):
     r = c.get("/admin/export/telecharger", query_string=params)
@@ -268,7 +275,7 @@ def test_every_page_renders_for_both_roles(app):
                    "/semaine", "/semaine?sup=none", "/mois", f"/checklist/1/{w}", f"/checklist/2/{w}",
                    f"/inventaire/1/{m}", f"/stock/1/{m}", "/admin/stations", "/admin/stations/1", "/admin/stations/new",
                    "/admin/users", f"/admin/users/{sup_id}", "/admin/import", "/admin/export", "/admin/settings",
-                   "/admin/journal", "/admin/plus", "/compte", "/login"]
+                   "/admin/plus", "/compte", "/login"]
     for url in admin_pages:
         assert admin.get(url).status_code == 200, url
     # la fiche d'un superviseur montre bien CE superviseur (et pas l'admin connecté)

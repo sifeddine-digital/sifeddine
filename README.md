@@ -83,8 +83,8 @@ Les superviseurs peuvent **« Ajouter à l'écran d'accueil »** depuis Chrome/S
   bouton **Relancer** qui ouvre WhatsApp avec la liste des stations restantes du superviseur.
 - **Sécurité** : mot de passe provisoire à changer à la première connexion, changement / réinitialisation du mot de passe
   = déconnexion des autres appareils, blocage après 8 essais ratés (15 min), en-têtes de sécurité (CSP sans JavaScript
-  inline, anti-iframe, pas de cache des pages privées), protection contre l'injection de formules dans l'export Excel,
-  **journal d'activité** (connexions, envois, affectations, exports…) et **sauvegarde** de la base en un clic.
+  inline, anti-iframe, pas de cache des pages privées), protection contre l'injection de formules dans l'export Excel
+  et **sauvegarde** de la base en un clic.
 
 ## Règles d'accès
 

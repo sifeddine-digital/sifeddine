@@ -34,7 +34,6 @@
       <div class="menu-head"><span class="avatar lg">{{ _ini }}</span><span><b>{{ _me.name }}</b><small>{{ _me.email }}</small></span></div>
       {% if _me.role == 'admin' %}
       <a href="{{ url_for('admin.import_view') }}">{{ icon('upload') }}Importer la fiche Excel</a>
-      <a href="{{ url_for('admin.journal') }}">{{ icon('history') }}Journal d'activité</a>
       <a href="{{ url_for('admin.settings') }}">{{ icon('sliders') }}Seuils de scoring</a>
       <a href="{{ url_for('admin.backup') }}">{{ icon('database') }}Sauvegarder les données</a>
       {% endif %}
@@ -71,7 +70,6 @@
     {{ navlink('admin.users', 'Superviseurs', 'users', ('admin.user_edit',), '<em class="nav-count">' ~ _nav.sups ~ '</em>') }}
     <div class="nav-label">Outils</div>
     {{ navlink('admin.import_view', 'Importer la fiche', 'upload') }}
-    {{ navlink('admin.journal', "Journal d'activité", 'history') }}
     {{ navlink('admin.settings', 'Seuils de scoring', 'sliders') }}
     <a href="{{ url_for('admin.backup') }}">{{ icon('database') }}<span>Sauvegarder les données</span></a>
   </nav>
@@ -113,7 +111,7 @@
   <a href="{{ url_for('terrain.semaine') }}" class="{{ 'on' if _ep in ('terrain.semaine','terrain.checklist') }}"><span>{{ icon('check', 22) }}</span>Checklists</a>
   <a href="{{ url_for('admin.export') }}" class="{{ 'on' if _ep == 'admin.export' }}"><span>{{ icon('download', 22) }}</span>Export</a>
   <a href="{{ url_for('admin.stations') }}" class="{{ 'on' if _ep in ('admin.stations','admin.station_edit') }}"><span>{{ icon('station', 22) }}</span>Stations</a>
-  <a href="{{ url_for('admin.plus') }}" class="{{ 'on' if _ep in ('admin.plus','admin.users','admin.user_edit','terrain.mois','terrain.inventaire','terrain.stock','admin.journal','admin.settings','admin.import_view') }}"><span>{{ icon('more', 22) }}</span>Plus</a>
+  <a href="{{ url_for('admin.plus') }}" class="{{ 'on' if _ep in ('admin.plus','admin.users','admin.user_edit','terrain.mois','terrain.inventaire','terrain.stock','admin.settings','admin.import_view') }}"><span>{{ icon('more', 22) }}</span>Plus</a>
 </nav>
 {% endif %}
 {% if _me and _me.role != 'admin' and not _me.must_change %}
