@@ -1,0 +1,10 @@
+.venv
+instance
+__pycache__
+*.pyc
+.git
+.pytest_cache
+deploy/.env
+deploy/sauvegardes
+*.sqlite3
+*.xlsx

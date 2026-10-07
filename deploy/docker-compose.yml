@@ -1,0 +1,35 @@
+# Déploiement sur un VPS (Ubuntu) : l'application + Caddy (HTTPS automatique Let's Encrypt).
+# Utilisation : voir DEPLOIEMENT_VPS.md
+services:
+  app:
+    build: ..
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_PATH: /data/los.sqlite3
+      BEHIND_PROXY: "1"
+      SESSION_COOKIE_SECURE: "1"
+    volumes:
+      - los-data:/data
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAINE: ${DOMAINE}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  los-data:
+  caddy-data:
+  caddy-config:

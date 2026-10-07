@@ -6,4 +6,4 @@ COPY . .
 ENV DATABASE_PATH=/data/los.sqlite3 SESSION_COOKIE_SECURE=1
 VOLUME /data
 EXPOSE 8000
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:8000", "wsgi:app"]
+CMD ["gunicorn", "-w", "2", "--preload", "--timeout", "120", "-b", "0.0.0.0:8000", "wsgi:app"]

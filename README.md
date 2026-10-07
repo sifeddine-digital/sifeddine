@@ -50,7 +50,12 @@ L'import est aussi disponible dans l'app : menu admin → **Importer la fiche Ex
 (après ~15 min sans visite). Parfait pour tester ; pour l'utilisation réelle, ajouter un disque Render
 (`DATABASE_PATH=/var/data/los.sqlite3`, plan payant) ou utiliser PythonAnywhere.
 
-### Hébergement permanent
+### Hébergement permanent sur un VPS
+
+Voir **[DEPLOIEMENT_VPS.md](DEPLOIEMENT_VPS.md)** : Docker + HTTPS automatique (Caddy) + sauvegarde quotidienne,
+fichiers prêts dans `deploy/`.
+
+### Autres hébergements
 
 L'app utilise SQLite (un seul fichier) : il faut un hébergement avec **disque persistant**.
 

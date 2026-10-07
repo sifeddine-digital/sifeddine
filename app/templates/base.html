@@ -11,8 +11,8 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
 {% from "_icons.html" import icon %}
-{% set u = current_user() if not hide_chrome else none %}
-{% set ep = request.endpoint or '' %}
+{% set _me = current_user() if not hide_chrome else none %}
+{% set _ep = request.endpoint or '' %}
 {% macro brand(sub=true) -%}
   <a class="brand" href="{{ url_for('auth.index') }}" aria-label="Accueil LOS Checklist">
     <span class="logo"><img src="{{ logo_url }}" alt="Vivo Energy" data-fallback="LOS"></span>
@@ -21,18 +21,18 @@
   </a>
 {%- endmacro %}
 {% macro navlink(endpoint, label, ico, active=(), extra='') -%}
-  <a href="{{ url_for(endpoint) }}" class="{{ 'on' if ep == endpoint or ep in active }}"{% if ep == endpoint or ep in active %} aria-current="page"{% endif %}>{{ icon(ico) }}<span>{{ label }}</span>{{ extra | safe }}</a>
+  <a href="{{ url_for(endpoint) }}" class="{{ 'on' if _ep == endpoint or _ep in active }}"{% if _ep == endpoint or _ep in active %} aria-current="page"{% endif %}>{{ icon(ico) }}<span>{{ label }}</span>{{ extra | safe }}</a>
 {%- endmacro %}
-<body class="{% block body_class %}{% endblock %} {{ ('is-admin' if u.role == 'admin' else 'is-sup') if u }}">
-{% if u %}
-{% set initials = (u.name.split()[:2] | map('first') | join) | upper %}
+<body class="{% block body_class %}{% endblock %} {{ ('is-admin' if _me.role == 'admin' else 'is-sup') if _me }}">
+{% if _me %}
+{% set _ini = (_me.name.split()[:2] | map('first') | join) | upper %}
 <header class="topbar">
   {{ brand(sub=false) }}
   <details class="usermenu">
-    <summary title="{{ u.email }}" aria-label="Mon compte"><span class="avatar">{{ initials }}</span></summary>
+    <summary title="{{ _me.email }}" aria-label="Mon compte"><span class="avatar">{{ _ini }}</span></summary>
     <div class="menu">
-      <div class="menu-head"><span class="avatar lg">{{ initials }}</span><span><b>{{ u.name }}</b><small>{{ u.email }}</small></span></div>
-      {% if u.role == 'admin' %}
+      <div class="menu-head"><span class="avatar lg">{{ _ini }}</span><span><b>{{ _me.name }}</b><small>{{ _me.email }}</small></span></div>
+      {% if _me.role == 'admin' %}
       <a href="{{ url_for('admin.import_view') }}">{{ icon('upload') }}Importer la fiche Excel</a>
       <a href="{{ url_for('admin.journal') }}">{{ icon('history') }}Journal d'activité</a>
       <a href="{{ url_for('admin.settings') }}">{{ icon('sliders') }}Seuils de scoring</a>
@@ -46,29 +46,29 @@
     </div>
   </details>
 </header>
-{% if u.role == 'admin' %}
-{% set st = nav_stats() %}
+{% if _me.role == 'admin' %}
+{% set _nav = nav_stats() %}
 <aside class="sidebar" aria-label="Navigation">
   <div class="side-brand">{{ brand() }}</div>
 
   <a class="week-widget" href="{{ url_for('admin.dashboard') }}">
-    <span class="ww-top"><span class="ww-week">{{ icon('calendar', 15) }}Semaine {{ st.week }}</span>
-      <span class="ww-days">{% if st.days_left > 1 %}J-{{ st.days_left }}{% elif st.days_left == 1 %}Demain{% else %}Dernier jour{% endif %}</span></span>
-    <span class="ww-num"><b>{{ st.sent }}</b><span>/ {{ st.total }}</span><em>{{ pct(st.ratio) or '0 %' }}</em></span>
-    <span class="ww-bar"><i style="width: {{ (st.ratio * 100) | round(1) }}%"></i></span>
-    <span class="ww-sub">{% if st.remaining %}{{ st.remaining }} checklist{{ 's' if st.remaining > 1 }} à faire cette semaine{% else %}Toutes les checklists sont faites ✔{% endif %}</span>
+    <span class="ww-top"><span class="ww-week">{{ icon('calendar', 15) }}Semaine {{ _nav.week }}</span>
+      <span class="ww-days">{% if _nav.days_left > 1 %}J-{{ _nav.days_left }}{% elif _nav.days_left == 1 %}Demain{% else %}Dernier jour{% endif %}</span></span>
+    <span class="ww-num"><b>{{ _nav.sent }}</b><span>/ {{ _nav.total }}</span><em>{{ pct(_nav.ratio) or '0 %' }}</em></span>
+    <span class="ww-bar"><i style="width: {{ (_nav.ratio * 100) | round(1) }}%"></i></span>
+    <span class="ww-sub">{% if _nav.remaining %}{{ _nav.remaining }} checklist{{ 's' if _nav.remaining > 1 }} à faire cette semaine{% else %}Toutes les checklists sont faites ✔{% endif %}</span>
   </a>
 
   <nav class="side-nav">
     <div class="nav-label">Pilotage</div>
     {{ navlink('admin.dashboard', 'Tableau de bord', 'grid') }}
     {{ navlink('terrain.semaine', 'Checklists', 'check', ('terrain.checklist',),
-               ('<em class="nav-badge">' ~ st.remaining ~ '</em>') if st.remaining else '') }}
+               ('<em class="nav-badge">' ~ _nav.remaining ~ '</em>') if _nav.remaining else '') }}
     {{ navlink('terrain.mois', 'Inventaire & stock', 'box', ('terrain.inventaire', 'terrain.stock')) }}
     {{ navlink('admin.export', 'Export Excel', 'download') }}
     <div class="nav-label">Gestion</div>
-    {{ navlink('admin.stations', 'Stations', 'station', ('admin.station_edit',), '<em class="nav-count">' ~ st.total ~ '</em>') }}
-    {{ navlink('admin.users', 'Superviseurs', 'users', ('admin.user_edit',), '<em class="nav-count">' ~ st.sups ~ '</em>') }}
+    {{ navlink('admin.stations', 'Stations', 'station', ('admin.station_edit',), '<em class="nav-count">' ~ _nav.total ~ '</em>') }}
+    {{ navlink('admin.users', 'Superviseurs', 'users', ('admin.user_edit',), '<em class="nav-count">' ~ _nav.sups ~ '</em>') }}
     <div class="nav-label">Outils</div>
     {{ navlink('admin.import_view', 'Importer la fiche', 'upload') }}
     {{ navlink('admin.journal', "Journal d'activité", 'history') }}
@@ -77,8 +77,8 @@
   </nav>
 
   <div class="side-user">
-    <a class="su-main {{ 'on' if ep == 'auth.compte' }}" href="{{ url_for('auth.compte') }}" title="Mon mot de passe">
-      <span class="avatar">{{ initials }}</span><span class="su-text"><b>{{ u.name }}</b><small>Administrateur</small></span></a>
+    <a class="su-main {{ 'on' if _ep == 'auth.compte' }}" href="{{ url_for('auth.compte') }}" title="Mon mot de passe">
+      <span class="avatar">{{ _ini }}</span><span class="su-text"><b>{{ _me.name }}</b><small>Administrateur</small></span></a>
     <form method="post" action="{{ url_for('auth.logout') }}">
       <input type="hidden" name="csrf" value="{{ csrf_token }}">
       <button class="icon-btn" title="Se déconnecter" aria-label="Se déconnecter">{{ icon('logout') }}</button>
@@ -105,21 +105,21 @@
   {% block content %}{% endblock %}
 </main>
 
-{% if u and u.role == 'admin' and not u.must_change %}
+{% if _me and _me.role == 'admin' and not _me.must_change %}
 <nav class="bottomnav" aria-label="Navigation">
-  <a href="{{ url_for('admin.dashboard') }}" class="{{ 'on' if ep == 'admin.dashboard' }}"><span>{{ icon('grid', 22) }}</span>Tableau</a>
-  <a href="{{ url_for('terrain.semaine') }}" class="{{ 'on' if ep in ('terrain.semaine','terrain.checklist') }}"><span>{{ icon('check', 22) }}</span>Checklists</a>
-  <a href="{{ url_for('admin.export') }}" class="{{ 'on' if ep == 'admin.export' }}"><span>{{ icon('download', 22) }}</span>Export</a>
-  <a href="{{ url_for('admin.stations') }}" class="{{ 'on' if ep in ('admin.stations','admin.station_edit') }}"><span>{{ icon('station', 22) }}</span>Stations</a>
-  <a href="{{ url_for('admin.plus') }}" class="{{ 'on' if ep in ('admin.plus','admin.users','admin.user_edit','terrain.mois','terrain.inventaire','terrain.stock','admin.journal','admin.settings','admin.import_view') }}"><span>{{ icon('more', 22) }}</span>Plus</a>
+  <a href="{{ url_for('admin.dashboard') }}" class="{{ 'on' if _ep == 'admin.dashboard' }}"><span>{{ icon('grid', 22) }}</span>Tableau</a>
+  <a href="{{ url_for('terrain.semaine') }}" class="{{ 'on' if _ep in ('terrain.semaine','terrain.checklist') }}"><span>{{ icon('check', 22) }}</span>Checklists</a>
+  <a href="{{ url_for('admin.export') }}" class="{{ 'on' if _ep == 'admin.export' }}"><span>{{ icon('download', 22) }}</span>Export</a>
+  <a href="{{ url_for('admin.stations') }}" class="{{ 'on' if _ep in ('admin.stations','admin.station_edit') }}"><span>{{ icon('station', 22) }}</span>Stations</a>
+  <a href="{{ url_for('admin.plus') }}" class="{{ 'on' if _ep in ('admin.plus','admin.users','admin.user_edit','terrain.mois','terrain.inventaire','terrain.stock','admin.journal','admin.settings','admin.import_view') }}"><span>{{ icon('more', 22) }}</span>Plus</a>
 </nav>
 {% endif %}
-{% if u and u.role != 'admin' and not u.must_change %}
-{% set n = pending_count() %}
+{% if _me and _me.role != 'admin' and not _me.must_change %}
+{% set _pend = pending_count() %}
 <nav class="bottomnav" aria-label="Navigation">
-  <a href="{{ url_for('terrain.semaine') }}" class="{{ 'on' if ep in ('terrain.semaine','terrain.checklist') }}"><span>{{ icon('check', 22) }}{% if n %}<b class="badge">{{ n }}</b>{% endif %}</span>Checklist</a>
-  <a href="{{ url_for('terrain.mois') }}" class="{{ 'on' if ep in ('terrain.mois','terrain.inventaire','terrain.stock') }}"><span>{{ icon('box', 22) }}</span>Inventaire</a>
-  <a href="{{ url_for('auth.compte') }}" class="{{ 'on' if ep == 'auth.compte' }}"><span>{{ icon('user', 22) }}</span>Compte</a>
+  <a href="{{ url_for('terrain.semaine') }}" class="{{ 'on' if _ep in ('terrain.semaine','terrain.checklist') }}"><span>{{ icon('check', 22) }}{% if _pend %}<b class="badge">{{ _pend }}</b>{% endif %}</span>Checklist</a>
+  <a href="{{ url_for('terrain.mois') }}" class="{{ 'on' if _ep in ('terrain.mois','terrain.inventaire','terrain.stock') }}"><span>{{ icon('box', 22) }}</span>Inventaire</a>
+  <a href="{{ url_for('auth.compte') }}" class="{{ 'on' if _ep == 'auth.compte' }}"><span>{{ icon('user', 22) }}</span>Compte</a>
 </nav>
 {% endif %}
 <script src="{{ url_for('static', filename='app.js') }}"></script>

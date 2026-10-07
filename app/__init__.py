@@ -101,7 +101,8 @@ def _bootstrap_admin():
     email = os.environ.get("ADMIN_EMAIL", "").strip().lower()
     password = os.environ.get("ADMIN_PASSWORD", "")
     if email and len(password) >= 8 and not db.query("SELECT 1 FROM users WHERE email = ?", (email,), one=True):
-        db.execute("INSERT INTO users(email, name, role, password_hash) VALUES (?, 'Admin', 'admin', ?)",
+        # OR IGNORE : plusieurs processus du serveur peuvent démarrer en même temps
+        db.execute("INSERT OR IGNORE INTO users(email, name, role, password_hash) VALUES (?, 'Admin', 'admin', ?)",
                    (email, generate_password_hash(password)))
 
 
