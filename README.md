@@ -55,8 +55,14 @@ L'import est aussi disponible dans l'app : menu admin → **Importer la fiche Ex
 
 ### Hébergement permanent sur un VPS
 
-Voir **[DEPLOIEMENT_VPS.md](DEPLOIEMENT_VPS.md)** : Docker + HTTPS automatique (Caddy) + sauvegarde quotidienne,
-fichiers prêts dans `deploy/`.
+Sur un VPS Ubuntu, en une commande (domaine, email et mot de passe admin demandés) :
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sifeddine-digital/sifeddine/main/deploy/install.sh | sudo bash
+```
+
+Détails, reprise des données du PC, sauvegardes et dépannage : **[DEPLOIEMENT_VPS.md](DEPLOIEMENT_VPS.md)**
+(Docker + HTTPS automatique avec Caddy + sauvegarde quotidienne). Contexte technique pour un assistant : [CLAUDE.md](CLAUDE.md).
 
 ### Autres hébergements
 
