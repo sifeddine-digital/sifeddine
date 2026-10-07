@@ -34,7 +34,9 @@ def dashboard():
     return render_template("admin/dashboard.html", d=d, week=week, secteur=secteur, sup=sup,
                            secteurs=secteurs(), sups=_supervisors(),
                            prev_week=week - dt.timedelta(days=7), next_week=week + dt.timedelta(days=7),
-                           seuil_bloc=seuil_bloc, seuil_global=seuil_global)
+                           seuil_bloc=seuil_bloc, seuil_global=seuil_global,
+                           is_current=week == scoring.week_start(),
+                           days_left=(week + dt.timedelta(days=6) - dt.date.today()).days)
 
 
 # ----------------------------------------------------------------- stations
@@ -331,6 +333,13 @@ def _rescore():
         sc = scoring.score_checklist(json.loads(c["data"]).get("answers"), b, g)
         db.execute("UPDATE checklists SET score_global = ?, statut = ? WHERE id = ?", (sc["global"], sc["statut"], c["id"]))
     db.commit()
+
+
+@bp.route("/plus")
+@admin_required
+def plus():
+    """Menu complet sur téléphone (le menu du bas n'affiche que les 4 écrans principaux)."""
+    return render_template("admin/plus.html")
 
 
 # -------------------------------------------------------- journal / sauvegarde

@@ -159,8 +159,16 @@ def dashboard(week, secteur=None, sup_id=None, trend_weeks=8):
             digits = "212" + digits[1:]  # numéro marocain local -> international
         relances[sid] = {"n": len(names), "text": msg, "phone": digits}
 
+    cweeks, ctable = weekly_compliance(stations, week)
+    strips = {row["sup_id"]: list(zip(cweeks, row["cells"])) for row in ctable}
+    sups = [{"name": name, "sid": sid, "g": summarize(v), "strip": strips.get(sid, []), "relance": relances.get(sid)}
+            for (name, sid), v in by_sup.items()]
+    sups.sort(key=lambda x: (x["sid"] is None, x["name"]))
+
     return {
-        "compliance": weekly_compliance(stations, week),
+        "sups": sups,
+        "chart": trend_chart(trend),
+        "compliance": (cweeks, ctable),
         "relances": relances,
         "week": week,
         "kpi": summarize(rows),
@@ -173,3 +181,45 @@ def dashboard(week, secteur=None, sup_id=None, trend_weeks=8):
         "trend": trend,
         "rows": rows,
     }
+
+
+def trend_chart(trend, width=640, height=220):
+    """Géométrie SVG d'un graphique en lignes (2 séries en %, un seul axe 0–100 %)."""
+    left, right, top, bottom = 40, 64, 14, 30
+    pw, ph = width - left - right, height - top - bottom
+    n = len(trend)
+    xs = [left + (pw * i / (n - 1) if n > 1 else pw / 2) for i in range(n)]
+    y = lambda v: top + ph * (1 - v)  # noqa: E731
+    series = []
+    for key, label, color in (("completion", "Complétion", "var(--series-1)"), ("score", "Score moyen", "var(--series-2)")):
+        pts = [(x, y(t[key]), t[key]) for x, t in zip(xs, trend) if t[key] is not None]
+        segs, cur = [], []
+        for i, t in enumerate(trend):  # coupe la ligne là où il n'y a pas de donnée
+            if t[key] is None:
+                if cur:
+                    segs.append(cur)
+                cur = []
+            else:
+                cur.append(f"{xs[i]:.1f},{y(t[key]):.1f}")
+        if cur:
+            segs.append(cur)
+        series.append({"key": key, "label": label, "color": color, "segments": [" ".join(sg) for sg in segs],
+                       "last": pts[-1] if pts else None})
+    # étiquettes de fin : écarter si elles se chevauchent
+    lasts = [s_["last"] for s_ in series if s_["last"]]
+    if len(lasts) == 2 and abs(lasts[0][1] - lasts[1][1]) < 14:
+        hi, lo = sorted(range(2), key=lambda i: lasts[i][1])
+        mid = (lasts[0][1] + lasts[1][1]) / 2
+        for s_, dy in ((series[hi], -8), (series[lo], 8)):
+            s_["label_y"] = mid + dy
+    for s_ in series:
+        if s_["last"] and "label_y" not in s_:
+            s_["label_y"] = s_["last"][1]
+    cols = []
+    step = pw / (n - 1) if n > 1 else pw
+    for x, t in zip(xs, trend):
+        cols.append({"x": x - step / 2, "w": step, "cx": x, "week": t["week"], "completion": t["completion"],
+                     "score": t["score"], "envoyees": t["envoyees"], "stations": t["stations"]})
+    grid = [(top + ph * (1 - g), f"{int(g * 100)} %") for g in (0, .25, .5, .75, 1)]
+    return {"w": width, "h": height, "left": left, "right": width - right, "top": top, "bottom": top + ph,
+            "series": series, "cols": cols, "grid": grid}
