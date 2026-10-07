@@ -83,11 +83,17 @@ def create_app(test_config=None):
 LOGO_URL_DEFAUT = "https://sc.atzer-ma.com/img/shell.svg"
 
 
+LOGOS_LOCAUX = ("vivo-energy.svg", "shell.svg")
+
+
 def _logo_url(app):
-    """Logo local (static/img/shell.svg) s'il existe, sinon LOGO_URL ou le logo en ligne."""
-    if os.path.exists(os.path.join(app.static_folder, "img", "shell.svg")):
-        return url_for("static", filename="img/shell.svg")
-    return os.environ.get("LOGO_URL", LOGO_URL_DEFAUT)
+    """Logo fourni avec l'app (static/img/vivo-energy.svg) ; sinon LOGO_URL ou le logo en ligne."""
+    if os.environ.get("LOGO_URL"):
+        return os.environ["LOGO_URL"]
+    for name in LOGOS_LOCAUX:
+        if os.path.exists(os.path.join(app.static_folder, "img", name)):
+            return url_for("static", filename=f"img/{name}")
+    return LOGO_URL_DEFAUT
 
 
 def _bootstrap_admin():
