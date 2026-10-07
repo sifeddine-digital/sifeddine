@@ -38,7 +38,8 @@
     <td class="cell-main"><strong>{{ s.name }}</strong></td>
     <td data-label="Superviseur">{{ s.sup_name or '' }}{% if not s.sup_name %}<span class="pill todo">non assignée</span>{% endif %}</td>
     <td data-label="État">{{ 'Active' if s.active else 'Inactive' }}</td>
-    <td><a class="btn tiny ghost" href="{{ url_for('admin.station_edit', station_id=s.id) }}">Modifier</a></td>
+    <td class="cell-actions"><a class="btn tiny ghost" href="{{ url_for('admin.station_edit', station_id=s.id) }}">Modifier</a>
+      <a class="btn tiny ghost" href="{{ url_for('admin.station_fiche', station_id=s.id) }}" title="Fiche Excel de la station">⤓ Fiche</a></td>
   </tr>
   {% else %}<tr><td colspan="8" class="muted">Aucune station. <a href="{{ url_for('admin.import_view') }}">Importer la fiche Excel</a></td></tr>{% endfor %}
   </tbody>

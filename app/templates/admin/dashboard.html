@@ -14,6 +14,7 @@
 {% macro zone(done, tot) -%}{{ 'z0' if not done else 'z3' if done >= tot else 'z2' if done * 2 >= tot else 'z1' }}{%- endmacro %}
 
 {% block content %}
+{% from "_icons.html" import icon %}
 {% set k = d.kpi %}
 {% set remaining = k.stations - k.envoyees %}
 
@@ -49,7 +50,7 @@
 
   {# ------------------------------------------------ avancement (chiffre clé) #}
   <section class="card hero c-5">
-    <div class="eyebrow">Avancement de la semaine</div>
+    <div class="eyebrow">Avancement de la semaine · état du réseau</div>
     <div class="hero-row">
       <div class="hero-num">{{ pct(k.completion) or '0 %' }}</div>
       <div class="hero-side">
@@ -60,8 +61,15 @@
         </div>
       </div>
     </div>
-    {{ meter(k.completion) }}
-    <div class="hero-foot muted">{{ k.brouillons }} brouillon(s) en cours</div>
+    {% set nf = k.stations - k.envoyees - k.brouillons %}
+    {% set segs = [('ok', 'Conforme', k.conforme), ('warn', 'À corriger', k.a_corriger), ('crit', 'Critique', k.critique),
+                   ('draft', 'Brouillon', k.brouillons), ('none', 'Non faite', nf)] %}
+    <div class="netbar" role="img" aria-label="État du réseau : {% for c, l, n in segs %}{{ l }} {{ n }}{{ ', ' if not loop.last }}{% endfor %}">
+      {% for c, l, n in segs if n %}<i class="{{ c }}" style="flex: {{ n }}" title="{{ l }} : {{ n }}"></i>{% endfor %}
+    </div>
+    <ul class="netlegend">
+      {% for c, l, n in segs %}<li><i class="{{ c }}"></i>{{ l }} <b class="num">{{ n }}</b></li>{% endfor %}
+    </ul>
   </section>
 
   <div class="tiles c-7">
@@ -86,6 +94,19 @@
       <span class="t-sub">tout est au niveau</span>
     </div>
   </div>
+
+  {# --------------------------------------------------------- à retenir #}
+  {% if d.insights %}
+  <section class="insights c-12" aria-label="À retenir">
+    {% for it in d.insights %}
+    {% set href = url_for('admin.user_edit', user_id=it.sid) if it.sid else url_for('admin.stations', sup='none') if it.link else '' %}
+    <{{ 'a href=' ~ href if href else 'div' }} class="insight tone-{{ it.tone }}">
+      <span class="in-ico">{{ icon(it.icon, 18) }}</span>
+      <span class="in-body"><small>{{ it.label }}</small><b>{{ it.value }}</b><span>{{ it.detail }}</span></span>
+    </{{ 'a' if href else 'div' }}>
+    {% endfor %}
+  </section>
+  {% endif %}
 
   {# ------------------------------------------------------- superviseurs #}
   <section class="card c-7">

@@ -305,6 +305,24 @@ def export_download():
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
+@bp.route("/stations/<int:station_id>/fiche.xlsx")
+@admin_required
+def station_fiche(station_id):
+    """La fiche Excel d'une seule station : sa dernière checklist, son inventaire, son stock et son historique."""
+    from .export_xlsx import build_workbook
+    st = query("SELECT * FROM stations WHERE id = ?", (station_id,), one=True)
+    if st is None:
+        abort(404)
+    wb = build_workbook(mode="dernier", station_ids={station_id}, n_weeks=12)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    safe = "".join(ch if ch.isalnum() else "_" for ch in st["name"]).strip("_")
+    log("export Excel", f"fiche station {st['name']}")
+    return send_file(buf, as_attachment=True, download_name=f"Fiche_{safe}_{dt.date.today():%Y-%m-%d}.xlsx",
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
 @bp.route("/settings", methods=["GET", "POST"])
 @admin_required
 def settings():
