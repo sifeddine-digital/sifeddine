@@ -1,6 +1,7 @@
 import datetime as dt
 import os
 import secrets
+from urllib.parse import urlsplit
 
 import click
 from flask import Flask, abort, request, session, url_for
@@ -40,12 +41,32 @@ def create_app(test_config=None):
             if not token or token != request.form.get("csrf"):
                 abort(400, "Jeton de sécurité invalide — rechargez la page.")
 
+    @app.after_request
+    def _security_headers(resp):
+        logo_host = urlsplit(os.environ.get("LOGO_URL", LOGO_URL_DEFAUT))
+        h = resp.headers
+        h.setdefault("Content-Security-Policy",
+                     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+                     f"img-src 'self' data: {logo_host.scheme}://{logo_host.netloc}; "
+                     "form-action 'self'; frame-ancestors 'none'; base-uri 'none'; object-src 'none'")
+        h.setdefault("X-Content-Type-Options", "nosniff")
+        h.setdefault("X-Frame-Options", "DENY")
+        h.setdefault("Referrer-Policy", "same-origin")
+        h.setdefault("Permissions-Policy", "geolocation=(self), camera=(), microphone=()")
+        if app.config["SESSION_COOKIE_SECURE"]:
+            h.setdefault("Strict-Transport-Security", "max-age=31536000")
+        if resp.mimetype == "text/html":
+            h["Cache-Control"] = "no-store"  # pas de pages privées dans le cache (PC partagé)
+        return resp
+
     @app.context_processor
     def _inject():
         if "csrf" not in session:
             session["csrf"] = secrets.token_urlsafe(32)
+        from .terrain import pending_count
         return {"csrf_token": session["csrf"], "pct": scoring.pct, "logo_url": _logo_url(app),
-                "week_label": scoring.week_label, "month_label": scoring.month_label}
+                "week_label": scoring.week_label, "month_label": scoring.month_label,
+                "pending_count": pending_count}
 
     from .auth import bp as auth_bp, current_user
     from .terrain import bp as terrain_bp

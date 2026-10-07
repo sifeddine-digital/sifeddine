@@ -64,6 +64,20 @@ Variables d'environnement : `SECRET_KEY` (sinon générée dans `instance/`), `D
 
 Les superviseurs peuvent **« Ajouter à l'écran d'accueil »** depuis Chrome/Safari : l'app s'ouvre alors comme une application.
 
+## Nouveautés v2
+
+- **Checklist hebdomadaire mise en avant** : carte « N checklists à faire avant dimanche (J-x) », bouton
+  « Commencer / Continuer », rappel des checklists de la **semaine dernière** à rattraper, badge rouge dans le menu,
+  historique des 4 dernières semaines (points de couleur) pour chaque station. Inventaire & stock restent mensuels.
+- **Export Excel en un clic** : *Dernier état* (la dernière checklist de chaque station, quelle que soit la semaine),
+  *Cette semaine*, *Semaine dernière*, ou export personnalisé (une semaine, une période du … au …, par secteur et par superviseur).
+- **Tableau de bord PC** : menu latéral, tableau « Régularité hebdomadaire » (8 semaines × superviseur),
+  bouton **Relancer** qui ouvre WhatsApp avec la liste des stations restantes du superviseur.
+- **Sécurité** : mot de passe provisoire à changer à la première connexion, changement / réinitialisation du mot de passe
+  = déconnexion des autres appareils, blocage après 8 essais ratés (15 min), en-têtes de sécurité (CSP sans JavaScript
+  inline, anti-iframe, pas de cache des pages privées), protection contre l'injection de formules dans l'export Excel,
+  **journal d'activité** (connexions, envois, affectations, exports…) et **sauvegarde** de la base en un clic.
+
 ## Règles d'accès
 
 | | Superviseur | Admin |
@@ -90,8 +104,8 @@ pip install pytest && pytest -q
 ## Idées d'évolution
 
 1. **Photos** sur chaque « Non » (preuve + suivi avant / après).
-2. **Rappels automatiques** (WhatsApp / email) le jeudi aux superviseurs qui n'ont pas terminé leur semaine,
-   et récapitulatif hebdomadaire envoyé à l'admin le lundi matin.
+2. **Rappels automatiques** (email / SMS) le jeudi aux superviseurs qui n'ont pas terminé leur semaine
+   (la relance WhatsApp manuelle existe déjà dans le tableau de bord).
 3. **Suivi des actions** : chaque action devient une tâche « ouverte → clôturée », vérifiée à la visite suivante.
 4. **Rôle « manager » en lecture seule** (direction, Vivo Energy) pour consulter le tableau de bord sans modifier.
 5. **Classement des stations / superviseurs** et badge « station du mois ».

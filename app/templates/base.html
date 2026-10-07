@@ -10,21 +10,24 @@
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
-<body class="{% block body_class %}{% endblock %}">
 {% set u = current_user() %}
+{% set ep = request.endpoint or '' %}
+{% macro brand() -%}
+  <a class="brand" href="{{ url_for('auth.index') }}"><span class="logo"><img src="{{ logo_url }}" alt="" data-fallback="LOS"></span> LOS Checklist</a>
+{%- endmacro %}
+{% macro admin_links() -%}
+  <a href="{{ url_for('admin.dashboard') }}" class="{{ 'on' if ep == 'admin.dashboard' }}"><i>◫</i>Tableau de bord</a>
+  <a href="{{ url_for('terrain.semaine') }}" class="{{ 'on' if ep in ('terrain.semaine','terrain.checklist') }}"><i>✓</i>Checklists <small>hebdo</small></a>
+  <a href="{{ url_for('terrain.mois') }}" class="{{ 'on' if ep in ('terrain.mois','terrain.inventaire','terrain.stock') }}"><i>▤</i>Inventaire & stock <small>mensuel</small></a>
+  <a href="{{ url_for('admin.export') }}" class="{{ 'on' if ep == 'admin.export' }}"><i>⤓</i>Export Excel</a>
+  <a href="{{ url_for('admin.stations') }}" class="{{ 'on' if ep in ('admin.stations','admin.station_edit') }}"><i>⌂</i>Stations</a>
+  <a href="{{ url_for('admin.users') }}" class="{{ 'on' if ep in ('admin.users','admin.user_edit') }}"><i>☺</i>Superviseurs</a>
+{%- endmacro %}
+<body class="{% block body_class %}{% endblock %} {{ ('is-admin' if u.role == 'admin' else 'is-sup') if u }}">
 {% if u %}
 <header class="topbar">
-  <a class="brand" href="{{ url_for('auth.index') }}"><span class="logo"><img src="{{ logo_url }}" alt="" onerror="this.parentNode.textContent='LOS'"></span> LOS Checklist</a>
-  {% if u.role == 'admin' %}
-  <nav class="adminnav">
-    <a href="{{ url_for('admin.dashboard') }}" class="{{ 'on' if request.endpoint == 'admin.dashboard' }}">Tableau de bord</a>
-    <a href="{{ url_for('terrain.semaine') }}" class="{{ 'on' if request.endpoint in ('terrain.semaine','terrain.checklist') }}">Checklists</a>
-    <a href="{{ url_for('terrain.mois') }}" class="{{ 'on' if request.endpoint in ('terrain.mois','terrain.inventaire','terrain.stock') }}">Inventaire & stock</a>
-    <a href="{{ url_for('admin.stations') }}" class="{{ 'on' if request.endpoint in ('admin.stations','admin.station_edit') }}">Stations</a>
-    <a href="{{ url_for('admin.users') }}" class="{{ 'on' if request.endpoint in ('admin.users','admin.user_edit') }}">Superviseurs</a>
-    <a href="{{ url_for('admin.export') }}" class="{{ 'on' if request.endpoint == 'admin.export' }}">Export Excel</a>
-  </nav>
-  {% endif %}
+  {{ brand() }}
+  {% if u.role == 'admin' %}<nav class="adminnav">{{ admin_links() }}</nav>{% endif %}
   <details class="usermenu">
     <summary title="{{ u.email }}">{{ u.name.split(' ')[0] }} ▾</summary>
     <div class="menu">
@@ -32,6 +35,8 @@
       {% if u.role == 'admin' %}
       <a href="{{ url_for('admin.import_view') }}">Importer la fiche Excel</a>
       <a href="{{ url_for('admin.settings') }}">Seuils de scoring</a>
+      <a href="{{ url_for('admin.journal') }}">Journal d'activité</a>
+      <a href="{{ url_for('admin.backup') }}">Sauvegarder les données</a>
       {% endif %}
       <a href="{{ url_for('auth.compte') }}">Changer mon mot de passe</a>
       <form method="post" action="{{ url_for('auth.logout') }}">
@@ -41,6 +46,23 @@
     </div>
   </details>
 </header>
+{% if u.role == 'admin' %}
+<aside class="sidebar">
+  {{ brand() }}
+  <nav>{{ admin_links() }}</nav>
+  <div class="side-foot">
+    <a href="{{ url_for('admin.import_view') }}" class="{{ 'on' if ep == 'admin.import_view' }}">Importer la fiche</a>
+    <a href="{{ url_for('admin.journal') }}" class="{{ 'on' if ep == 'admin.journal' }}">Journal d'activité</a>
+    <a href="{{ url_for('admin.settings') }}" class="{{ 'on' if ep == 'admin.settings' }}">Seuils de scoring</a>
+    <a href="{{ url_for('admin.backup') }}">Sauvegarder les données</a>
+    <a href="{{ url_for('auth.compte') }}" class="{{ 'on' if ep == 'auth.compte' }}">{{ u.name }}<small>{{ u.email }}</small></a>
+    <form method="post" action="{{ url_for('auth.logout') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <button class="linkbtn">Se déconnecter</button>
+    </form>
+  </div>
+</aside>
+{% endif %}
 {% endif %}
 
 <main class="{% block main_class %}wrap{% endblock %}">
@@ -60,11 +82,12 @@
   {% block content %}{% endblock %}
 </main>
 
-{% if u and u.role != 'admin' %}
+{% if u and u.role != 'admin' and not u.must_change %}
+{% set n = pending_count() %}
 <nav class="bottomnav">
-  <a href="{{ url_for('terrain.semaine') }}" class="{{ 'on' if request.endpoint in ('terrain.semaine','terrain.checklist') }}"><span>✓</span>Checklist</a>
-  <a href="{{ url_for('terrain.mois') }}" class="{{ 'on' if request.endpoint in ('terrain.mois','terrain.inventaire','terrain.stock') }}"><span>▤</span>Inventaire</a>
-  <a href="{{ url_for('auth.compte') }}" class="{{ 'on' if request.endpoint == 'auth.compte' }}"><span>●</span>Compte</a>
+  <a href="{{ url_for('terrain.semaine') }}" class="{{ 'on' if ep in ('terrain.semaine','terrain.checklist') }}"><span>✓{% if n %}<b class="badge">{{ n }}</b>{% endif %}</span>Checklist</a>
+  <a href="{{ url_for('terrain.mois') }}" class="{{ 'on' if ep in ('terrain.mois','terrain.inventaire','terrain.stock') }}"><span>▤</span>Inventaire</a>
+  <a href="{{ url_for('auth.compte') }}" class="{{ 'on' if ep == 'auth.compte' }}"><span>●</span>Compte</a>
 </nav>
 {% endif %}
 <script src="{{ url_for('static', filename='app.js') }}"></script>

@@ -3,6 +3,32 @@
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
 
+  // ---- logo : repli texte si l'image ne charge pas (pas de JS inline : CSP)
+  $$("img[data-fallback]").forEach(function (img) {
+    var fail = function () { img.parentNode.textContent = img.dataset.fallback; };
+    if (img.complete && !img.naturalWidth) fail(); else img.addEventListener("error", fail);
+  });
+
+  // ---- listes déroulantes de filtre : envoi automatique
+  $$("select[data-autosubmit]").forEach(function (sel) {
+    sel.addEventListener("change", function () { sel.form.submit(); });
+  });
+
+  // ---- export : options selon le mode choisi
+  var ef = $("#exportform");
+  if (ef) {
+    var syncMode = function () {
+      var m = ef.querySelector('input[name="mode"]:checked').value;
+      $$(".mode-opt", ef).forEach(function (el) {
+        var on = el.dataset.for.split(" ").indexOf(m) >= 0;
+        el.hidden = !on;
+        $$("select", el).forEach(function (s) { s.disabled = !on; });
+      });
+    };
+    ef.addEventListener("change", syncMode);
+    syncMode();
+  }
+
   // ---- recherche dans les listes
   $$("[data-filter]").forEach(function (input) {
     input.addEventListener("input", function () {

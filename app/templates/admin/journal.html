@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Journal d'activité{% endblock %}
+{% block main_class %}wrap wide{% endblock %}
+{% block content %}
+<div class="titlebar">
+  <h1>Journal d'activité <span class="muted small">(300 dernières actions)</span></h1>
+  <form class="filters" method="get"><input type="search" name="q" value="{{ q }}" placeholder="Filtrer (action, nom…)"><button class="btn ghost">Filtrer</button></form>
+</div>
+<div class="card table-wrap">
+  <table class="tbl">
+    <thead><tr><th>Date (UTC)</th><th>Utilisateur</th><th>Action</th><th>Détail</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr class="{{ 'warnrow' if r.action == 'échec connexion' }}"><td class="small">{{ r.ts }}</td><td>{{ r.name or '—' }}</td><td><strong>{{ r.action }}</strong></td><td class="small">{{ r.detail }}</td></tr>
+    {% else %}<tr><td colspan="4" class="muted">Aucune activité.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,17 +1,19 @@
-"""Espace administrateur : tableau de bord, stations, superviseurs, import / export."""
+"""Espace administrateur : tableau de bord, stations, superviseurs, import / export, journal, sauvegarde."""
 import datetime as dt
 import io
 import json
+import os
 import secrets
 import sqlite3
+import tempfile
 
-from flask import (Blueprint, abort, flash, redirect, render_template, request, send_file,
+from flask import (Blueprint, abort, current_app, flash, redirect, render_template, request, send_file,
                    url_for)
 from werkzeug.security import generate_password_hash
 
 from . import scoring
-from .auth import admin_required, current_user
-from .db import execute, get_db, query, secteurs, seuils, set_setting
+from .auth import admin_required, current_user, start_session
+from .db import execute, get_db, log, query, secteurs, seuils, set_setting
 from .stats import dashboard as build_dashboard
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -48,9 +50,12 @@ def stations():
             sup = request.form.get("supervisor_id")
             sup_id = int(sup) if sup and sup.isdigit() else None
             _bulk("UPDATE stations SET supervisor_id = ? WHERE id IN ({})", [sup_id], ids)
+            name = query("SELECT name FROM users WHERE id = ?", (sup_id,), one=True) if sup_id else None
+            log("affectation", f"{len(ids)} station(s) → {name['name'] if name else 'aucun superviseur'}")
             flash(f"{len(ids)} station(s) affectée(s).", "ok")
         elif action in ("activate", "deactivate"):
             _bulk("UPDATE stations SET active = ? WHERE id IN ({})", [1 if action == "activate" else 0], ids)
+            log("stations " + ("activées" if action == "activate" else "désactivées"), f"{len(ids)} station(s)")
             flash(f"{len(ids)} station(s) mise(s) à jour.", "ok")
         return redirect(request.full_path)
     secteur, sup, q = request.args.get("secteur", ""), request.args.get("sup", ""), request.args.get("q", "").strip()
@@ -100,6 +105,7 @@ def station_edit(station_id=None):
                     execute("INSERT INTO stations(ship_to, name, secteur, territoire, supervisor_id, active, "
                             "sort_order) VALUES (?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order),0)+1 "
                             "FROM stations))", vals)
+                log("station modifiée" if st else "station créée", f"{vals[1]} ({vals[0]})")
                 flash("Station enregistrée.", "ok")
                 return redirect(url_for("admin.stations"))
             except sqlite3.IntegrityError:
@@ -117,14 +123,17 @@ def station_edit(station_id=None):
 @bp.route("/checklist/<int:checklist_id>/lock", methods=["POST"])
 @admin_required
 def checklist_lock(checklist_id):
-    c = query("SELECT * FROM checklists WHERE id = ?", (checklist_id,), one=True)
+    c = query("SELECT c.*, s.name FROM checklists c JOIN stations s ON s.id = c.station_id WHERE c.id = ?",
+              (checklist_id,), one=True)
     if c is None:
         abort(404)
     if request.form.get("op") == "reopen":
         execute("UPDATE checklists SET status = 'brouillon', locked = 0 WHERE id = ?", (checklist_id,))
+        log("checklist renvoyée pour correction", f"{c['name']} — {c['week_start']}")
         flash("Checklist rouverte : le superviseur peut la corriger et la renvoyer.", "ok")
     else:
         execute("UPDATE checklists SET locked = 1 - locked WHERE id = ?", (checklist_id,))
+        log("checklist " + ("déverrouillée" if c["locked"] else "verrouillée"), f"{c['name']} — {c['week_start']}")
         flash("Verrou modifié.", "ok")
     return redirect(url_for("terrain.checklist", station_id=c["station_id"], week=c["week_start"]))
 
@@ -145,7 +154,8 @@ def users():
             flash("Mot de passe : 8 caractères minimum.", "error")
         else:
             try:
-                cur = execute("INSERT INTO users(email, name, phone, role, password_hash) VALUES (?, ?, ?, ?, ?)",
+                cur = execute("INSERT INTO users(email, name, phone, role, password_hash, must_change) "
+                              "VALUES (?, ?, ?, ?, ?, 1)",
                               (email, name, f.get("phone", "").strip(), role, generate_password_hash(password)))
             except sqlite3.IntegrityError:
                 flash("Cet email existe déjà.", "error")
@@ -153,6 +163,7 @@ def users():
             if f.get("secteur"):
                 execute("UPDATE stations SET supervisor_id = ? WHERE secteur = ? AND supervisor_id IS NULL",
                         (cur.lastrowid, f["secteur"]))
+            log("compte créé", f"{name} <{email}> ({role})")
             _flash_credentials(email, password)
             return redirect(url_for("admin.user_edit", user_id=cur.lastrowid))
     week = scoring.week_start().isoformat()
@@ -166,13 +177,14 @@ def users():
 
 
 def _gen_password():
-    return secrets.token_urlsafe(7)[:10]
+    alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    return "".join(secrets.choice(alphabet) for _ in range(10))
 
 
 def _flash_credentials(email, password):
     link = request.host_url.rstrip("/") + url_for("auth.login")
-    flash(f"Accès à transmettre au superviseur :\nLien : {link}\nEmail : {email}\nMot de passe : {password}",
-          "credentials")
+    flash(f"Accès à transmettre au superviseur :\nLien : {link}\nEmail : {email}\nMot de passe provisoire : {password}\n"
+          "(il choisira son propre mot de passe à la première connexion)", "credentials")
 
 
 @bp.route("/users/<int:user_id>", methods=["GET", "POST"])
@@ -194,6 +206,7 @@ def user_edit(user_id):
                     execute("UPDATE users SET name=?, email=?, phone=?, role=?, active=? WHERE id=?",
                             (f.get("name", "").strip() or u["name"], f.get("email", "").strip().lower() or u["email"],
                              f.get("phone", "").strip(), role, active, u["id"]))
+                    log("compte modifié", f"{u['name']} — rôle {role}, {'actif' if active else 'désactivé'}")
                     flash("Profil enregistré.", "ok")
                 except sqlite3.IntegrityError:
                     flash("Cet email existe déjà.", "error")
@@ -202,8 +215,15 @@ def user_edit(user_id):
             if len(password) < 8:
                 flash("Mot de passe : 8 caractères minimum.", "error")
             else:
-                execute("UPDATE users SET password_hash = ? WHERE id = ?", (generate_password_hash(password), u["id"]))
-                _flash_credentials(u["email"], password)
+                # nouveau hash => toutes les sessions ouvertes de ce compte sont fermées
+                execute("UPDATE users SET password_hash = ?, must_change = ? WHERE id = ?",
+                        (generate_password_hash(password), 0 if u["id"] == current_user()["id"] else 1, u["id"]))
+                log("mot de passe réinitialisé", u["name"])
+                if u["id"] == current_user()["id"]:
+                    start_session(query("SELECT * FROM users WHERE id = ?", (u["id"],), one=True), True)
+                    flash("Votre mot de passe a été changé.", "ok")
+                else:
+                    _flash_credentials(u["email"], password)
         elif op == "stations":
             ids = [int(i) for i in f.getlist("ids") if i.isdigit()]
             db = get_db()
@@ -212,6 +232,7 @@ def user_edit(user_id):
                 db.execute(f"UPDATE stations SET supervisor_id = ? WHERE id IN ({','.join('?' * len(ids))})",
                            [u["id"]] + ids)
             db.commit()
+            log("affectation", f"{len(ids)} station(s) → {u['name']}")
             flash(f"{len(ids)} station(s) affectée(s) à {u['name']}.", "ok")
         return redirect(url_for("admin.user_edit", user_id=u["id"]))
     stations = query("SELECT s.*, x.name AS sup_name FROM stations s LEFT JOIN users x ON x.id = s.supervisor_id "
@@ -236,31 +257,50 @@ def import_view():
             try:
                 report = import_fiche(f.stream, with_data=bool(request.form.get("with_data")),
                                       user_id=current_user()["id"])
+                log("import fiche Excel", f.filename[:120])
                 flash("Import terminé.", "ok")
             except Exception as exc:  # fichier illisible ou mise en page différente
                 flash(f"Import impossible : {exc}", "error")
     return render_template("admin/import.html", report=report)
 
 
-@bp.route("/export", methods=["GET", "POST"])
+@bp.route("/export")
 @admin_required
 def export():
-    if request.method == "POST":
-        from .export_xlsx import build_workbook
-        week = scoring.parse_week(request.form.get("week"))
-        n_weeks = max(1, min(52, int(request.form.get("weeks") or 8)))
-        chosen = request.form.getlist("secteurs") or secteurs()
-        wb = build_workbook(week, chosen, n_weeks)
-        buf = io.BytesIO()
-        wb.save(buf)
-        buf.seek(0)
-        iso = week.isocalendar()
+    weeks = [scoring.week_start() - dt.timedelta(days=7 * i) for i in range(0, 26)]
+    return render_template("admin/export.html", weeks=weeks, secteurs=secteurs(), sups=_supervisors(),
+                           n_stations=query("SELECT COUNT(*) AS n FROM stations WHERE active = 1", one=True)["n"])
+
+
+@bp.route("/export/telecharger")
+@admin_required
+def export_download():
+    from .export_xlsx import MODES, build_workbook
+    a = request.args
+    mode = a.get("mode") if a.get("mode") in MODES else "dernier"
+    chosen = [s for s in a.getlist("secteurs") if s] or None
+    sup = a.get("sup") or None
+    if sup not in (None, "none") and not str(sup).isdigit():
+        sup = None
+    n_weeks = max(1, min(52, int(a.get("weeks") or 8))) if str(a.get("weeks") or "8").isdigit() else 8
+    week = scoring.parse_week(a.get("week")) if a.get("week") else None
+    w_from = scoring.parse_week(a.get("from")) if a.get("from") else None
+    w_to = scoring.parse_week(a.get("to")) if a.get("to") else None
+    wb = build_workbook(mode=mode, secteurs=chosen, sup=sup, week=week, week_from=w_from, week_to=w_to,
+                        n_weeks=n_weeks)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    if mode == "semaine":
+        iso = (week or scoring.week_start()).isocalendar()
         name = f"LOS_Checklist_S{iso[1]:02d}_{iso[0]}.xlsx"
-        return send_file(buf, as_attachment=True, download_name=name,
-                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    weeks = [scoring.week_start() - dt.timedelta(days=7 * i) for i in range(0, 16)]
-    return render_template("admin/export.html", weeks=weeks, secteurs=secteurs(),
-                           current=request.args.get("w"))
+    elif mode == "periode":
+        name = f"LOS_Checklist_{(w_from or scoring.week_start()):%Y-%m-%d}_au_{(w_to or scoring.week_start()):%Y-%m-%d}.xlsx"
+    else:
+        name = f"LOS_Checklist_DernierEtat_{dt.date.today():%Y-%m-%d}.xlsx"
+    log("export Excel", f"{MODES[mode]} — {', '.join(chosen) if chosen else 'tous secteurs'}")
+    return send_file(buf, as_attachment=True, download_name=name,
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
 @bp.route("/settings", methods=["GET", "POST"])
@@ -277,6 +317,7 @@ def settings():
             set_setting("seuil_bloc", b)
             set_setting("seuil_global", g)
             _rescore()
+            log("seuils modifiés", f"bloc {b:.0%}, global {g:.0%}")
             flash("Seuils enregistrés — statuts recalculés.", "ok")
         return redirect(url_for("admin.settings"))
     b, g = seuils()
@@ -290,3 +331,37 @@ def _rescore():
         sc = scoring.score_checklist(json.loads(c["data"]).get("answers"), b, g)
         db.execute("UPDATE checklists SET score_global = ?, statut = ? WHERE id = ?", (sc["global"], sc["statut"], c["id"]))
     db.commit()
+
+
+# -------------------------------------------------------- journal / sauvegarde
+@bp.route("/journal")
+@admin_required
+def journal():
+    q = request.args.get("q", "").strip()
+    sql = ("SELECT j.*, u.name, u.email FROM journal j LEFT JOIN users u ON u.id = j.user_id")
+    args = []
+    if q:
+        sql += " WHERE j.action LIKE ? OR j.detail LIKE ? OR u.name LIKE ?"
+        args = [f"%{q}%"] * 3
+    rows = query(sql + " ORDER BY j.id DESC LIMIT 300", args)
+    return render_template("admin/journal.html", rows=rows, q=q)
+
+
+@bp.route("/sauvegarde")
+@admin_required
+def backup():
+    """Copie cohérente de la base (API backup de SQLite), à garder sur une clé USB / un drive."""
+    fd, path = tempfile.mkstemp(suffix=".sqlite3")
+    os.close(fd)
+    try:
+        dst = sqlite3.connect(path)
+        get_db().backup(dst)
+        dst.close()
+        with open(path, "rb") as fh:
+            data = io.BytesIO(fh.read())
+    finally:
+        os.remove(path)
+    log("sauvegarde téléchargée")
+    current_app.logger.info("Sauvegarde téléchargée par %s", current_user()["email"])
+    return send_file(data, as_attachment=True, download_name=f"LOS_sauvegarde_{dt.datetime.now():%Y-%m-%d_%H%M}.sqlite3",
+                     mimetype="application/octet-stream")

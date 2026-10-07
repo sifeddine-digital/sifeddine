@@ -2,11 +2,11 @@
 import datetime as dt
 import json
 
-from flask import Blueprint, abort, flash, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 
 from . import scoring
 from .auth import current_user, is_admin, login_required
-from .db import execute, query, seuils
+from .db import execute, log, query, secteurs, seuils
 from .referentiel import (BLOCS, ELIMINATOIRES, EQUIPEMENTS, EQUIPEMENTS_E1_E2, REPONSES,
                           STATUTS_RELEVE, STOCK_FREQUENCES, STOCK_METHODES, TOUS_LES_POINTS)
 
@@ -14,12 +14,58 @@ bp = Blueprint("terrain", __name__)
 
 
 # ------------------------------------------------------------------ helpers
-def my_stations():
+def my_stations(secteur=None, sup=None):
     if is_admin():
-        return query("SELECT s.*, u.name AS sup_name FROM stations s LEFT JOIN users u ON u.id = s.supervisor_id "
-                     "WHERE s.active = 1 ORDER BY s.secteur, s.sort_order, s.name")
+        sql = ("SELECT s.*, u.name AS sup_name FROM stations s LEFT JOIN users u ON u.id = s.supervisor_id "
+               "WHERE s.active = 1")
+        args = []
+        if secteur:
+            sql += " AND s.secteur = ?"
+            args.append(secteur)
+        if sup == "none":
+            sql += " AND s.supervisor_id IS NULL"
+        elif sup and str(sup).isdigit():
+            sql += " AND s.supervisor_id = ?"
+            args.append(int(sup))
+        return query(sql + " ORDER BY s.secteur, s.sort_order, s.name", args)
     return query("SELECT s.*, NULL AS sup_name FROM stations s WHERE s.active = 1 AND s.supervisor_id = ? "
                  "ORDER BY s.secteur, s.sort_order, s.name", (current_user()["id"],))
+
+
+def checklists_by_week(weeks):
+    """{(station_id, 'AAAA-MM-JJ'): ligne} pour une liste de lundis."""
+    if not weeks:
+        return {}
+    keys = [w.isoformat() for w in weeks]
+    rows = query("SELECT station_id, week_start, status, statut, score_global, visit_date FROM checklists "
+                 f"WHERE week_start IN ({','.join('?' * len(keys))})", keys)
+    return {(r["station_id"], r["week_start"]): r for r in rows}
+
+
+def dot_state(c):
+    if c is None:
+        return "miss"
+    if c["status"] != "envoye":
+        return "draft"
+    return {"Critique": "crit", "À corriger": "warn", "Conforme": "ok"}.get(c["statut"], "ok")
+
+
+def pending_count():
+    """Checklists à faire par le superviseur connecté : semaine en cours + semaine précédente non envoyées."""
+    u = current_user()
+    if u is None or u["role"] != "superviseur":
+        return 0
+    if "pending" not in g:
+        cur = scoring.week_start()
+        prev = cur - dt.timedelta(days=7)
+        row = query("""SELECT COUNT(*) AS n,
+                SUM(EXISTS(SELECT 1 FROM checklists c WHERE c.station_id = s.id AND c.week_start = ? AND c.status = 'envoye')) AS cur,
+                SUM(EXISTS(SELECT 1 FROM checklists c WHERE c.station_id = s.id AND c.week_start = ? AND c.status = 'envoye')) AS prev
+            FROM stations s WHERE s.active = 1 AND s.supervisor_id = ?""",
+                    (cur.isoformat(), prev.isoformat(), u["id"]), one=True)
+        n = row["n"] or 0
+        g.pending = (n - (row["cur"] or 0)) + (n - (row["prev"] or 0))
+    return g.pending
 
 
 def get_station(station_id):
@@ -69,16 +115,31 @@ def equipements_dotes(inv):
 @login_required
 def semaine():
     week = scoring.parse_week(request.args.get("w"))
-    stations = my_stations()
-    rows = {r["station_id"]: r for r in query(
-        "SELECT station_id, status, score_global, statut, visit_date FROM checklists WHERE week_start = ?",
-        (week.isoformat(),))}
-    items = [(s, rows.get(s["id"])) for s in stations]
-    done = sum(1 for _, c in items if c and c["status"] == "envoye")
+    current = scoring.week_start()
+    secteur, sup = request.args.get("secteur") or None, request.args.get("sup") or None
+    stations = my_stations(secteur, sup)
+    history_weeks = [week - dt.timedelta(days=7 * i) for i in range(4, 0, -1)]
+    by_week = checklists_by_week(history_weeks + [week])
+    items = []
+    for s in stations:
+        c = by_week.get((s["id"], week.isoformat()))
+        dots = [(w, dot_state(by_week.get((s["id"], w.isoformat())))) for w in history_weeks]
+        items.append((s, c, dots))
+    done = sum(1 for _, c, _ in items if c and c["status"] == "envoye")
+    # semaine précédente encore modifiable : on la rappelle tant qu'elle n'est pas complète
+    late = []
+    if week == current:
+        prev = (current - dt.timedelta(days=7)).isoformat()
+        late = [s for s, _, dots in items if dots[-1][1] in ("miss", "draft")]
+        late = [(s, by_week.get((s["id"], prev))) for s in late]
+    deadline = week + dt.timedelta(days=6)
+    sups = query("SELECT id, name FROM users WHERE role = 'superviseur' AND active = 1 ORDER BY name") if is_admin() else []
     return render_template(
-        "semaine.html", week=week, items=items, done=done, total=len(items),
+        "semaine.html", week=week, items=items, done=done, total=len(items), late=late,
         prev_week=week - dt.timedelta(days=7), next_week=week + dt.timedelta(days=7),
-        is_current=week == scoring.week_start())
+        is_current=week == current, deadline=deadline, days_left=(deadline - dt.date.today()).days,
+        history_weeks=history_weeks, secteur=secteur, sup=sup, secteurs=secteurs() if is_admin() else [],
+        sups=sups, editable_week=week_editable(week))
 
 
 @bp.route("/checklist/<int:station_id>/<week>", methods=["GET", "POST"])
@@ -117,9 +178,12 @@ def checklist(station_id, week):
                    submitted_at = COALESCE(excluded.submitted_at, checklists.submitted_at)""",
             (station_id, week.isoformat(), data["visit_date"] or None, json.dumps(data, ensure_ascii=False),
              status, sc["global"], sc["statut"], lat, lng, current_user()["id"], send))
-        flash("Checklist envoyée ✔" if send else "Brouillon enregistré.", "ok")
         if send:
-            return redirect(url_for("terrain.semaine", w=week.isoformat()))
+            log("checklist envoyée", f"{st['name']} — {scoring.week_label(week)} — {scoring.pct(sc['global'])} {sc['statut']}")
+            flash(f"✔ {st['name']} envoyée — {scoring.pct(sc['global']) or '—'} · {sc['statut'] or '—'}", "ok")
+            back = week if week >= scoring.week_start() else scoring.week_start()
+            return redirect(url_for("terrain.semaine", w=back.isoformat()))
+        flash("Brouillon enregistré.", "ok")
         return redirect(url_for("terrain.checklist", station_id=station_id, week=week.isoformat()))
 
     data = json.loads(row["data"]) if row else {}
