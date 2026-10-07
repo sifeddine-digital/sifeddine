@@ -15,15 +15,31 @@
   <div class="bar"><i style="width: {{ (done / total * 100) if total else 0 }}%"></i></div>
 </div>
 
+{% set todo = items | selectattr(1, 'none') | list %}
+{% set next = (items | rejectattr(1, 'none') | selectattr('1.status', 'ne', 'envoye') | list + todo) | first %}
+{% if next and total and done < total %}
+<a class="continue" href="{{ url_for('terrain.checklist', station_id=next[0].id, week=week.isoformat()) }}">
+  <div>{{ 'Continuer' if next[1] else 'Prochaine station' }} : {{ next[0].name }}<small>{{ total - done }} station(s) restante(s) cette semaine</small></div>
+  <span class="arrow">›</span>
+</a>
+{% elif total and done == total %}
+<div class="flash">Toutes vos checklists de la semaine sont envoyées ✔</div>
+{% endif %}
+
 {% if not items %}
   <div class="empty">Aucune station ne vous est affectée pour l'instant.<br>Contactez votre administrateur.</div>
 {% else %}
+<div class="filterchips" id="filterchips">
+  <button type="button" class="on" data-show="all">Toutes · {{ total }}</button>
+  <button type="button" data-show="todo">À faire · {{ total - done }}</button>
+  <button type="button" data-show="done">Envoyées · {{ done }}</button>
+</div>
 <input class="search" type="search" placeholder="Rechercher une station…" data-filter=".station-list li">
 {% set ns = namespace(sect=None) %}
 <ul class="station-list">
 {% for s, c in items %}
   {% if s.secteur != ns.sect %}{% set ns.sect = s.secteur %}<li class="group">{{ s.secteur }}</li>{% endif %}
-  <li data-text="{{ (s.name ~ ' ' ~ s.ship_to ~ ' ' ~ s.territoire) | lower }}">
+  <li data-text="{{ (s.name ~ ' ' ~ s.ship_to ~ ' ' ~ s.territoire) | lower }}" data-state="{{ 'done' if c and c.status == 'envoye' else 'todo' }}">
     <a href="{{ url_for('terrain.checklist', station_id=s.id, week=week.isoformat()) }}">
       <div>
         <div class="st-name">{{ s.name }}</div>
