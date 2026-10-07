@@ -31,6 +31,19 @@ L'import est aussi disponible dans l'app : menu admin → **Importer la fiche Ex
 
 ## Mise en ligne
 
+### Essai rapide sur Render (sans terminal)
+
+1. Créer un compte sur [render.com](https://render.com) avec « Sign in with GitHub ».
+2. **New → Blueprint**, choisir le dépôt `sifeddine` : Render lit `render.yaml`.
+3. Saisir `ADMIN_EMAIL` et `ADMIN_PASSWORD` (8 caractères min.) puis **Apply**.
+4. Ouvrir l'adresse `https://los-checklist-xxxx.onrender.com`, se connecter, puis **Importer la fiche Excel**.
+
+⚠️ Le plan gratuit n'a pas de disque permanent : les données sont effacées quand le service redémarre
+(après ~15 min sans visite). Parfait pour tester ; pour l'utilisation réelle, ajouter un disque Render
+(`DATABASE_PATH=/var/data/los.sqlite3`, plan payant) ou utiliser PythonAnywhere.
+
+### Hébergement permanent
+
 L'app utilise SQLite (un seul fichier) : il faut un hébergement avec **disque persistant**.
 
 - **PythonAnywhere** (simple, plan gratuit possible) : cloner le dépôt, créer un virtualenv, `pip install -r requirements.txt`,

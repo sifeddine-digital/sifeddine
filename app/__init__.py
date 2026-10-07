@@ -4,6 +4,7 @@ import secrets
 
 import click
 from flask import Flask, abort, request, session
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash
 
 from . import db, scoring
@@ -24,9 +25,13 @@ def create_app(test_config=None):
         app.config.update(test_config)
     os.makedirs(os.path.dirname(app.config["DATABASE"]) or ".", exist_ok=True)
 
+    if os.environ.get("BEHIND_PROXY") == "1":
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
     app.teardown_appcontext(db.close_db)
     with app.app_context():
         db.init_db()
+        _bootstrap_admin()
 
     @app.before_request
     def _csrf_protect():
@@ -52,6 +57,15 @@ def create_app(test_config=None):
 
     _register_cli(app)
     return app
+
+
+def _bootstrap_admin():
+    """Crée le premier admin depuis ADMIN_EMAIL / ADMIN_PASSWORD (hébergement sans terminal)."""
+    email = os.environ.get("ADMIN_EMAIL", "").strip().lower()
+    password = os.environ.get("ADMIN_PASSWORD", "")
+    if email and len(password) >= 8 and not db.query("SELECT 1 FROM users WHERE email = ?", (email,), one=True):
+        db.execute("INSERT INTO users(email, name, role, password_hash) VALUES (?, 'Admin', 'admin', ?)",
+                   (email, generate_password_hash(password)))
 
 
 def _instance_secret(app):
