@@ -42,7 +42,8 @@
       {% for s in stations %}
         <li data-text="{{ (s.name ~ ' ' ~ s.ship_to ~ ' ' ~ s.territoire) | lower }}">
           <label class="check"><input type="checkbox" name="ids" value="{{ s.id }}" {{ 'checked' if s.supervisor_id == u.id }}>
-            {{ s.name }} <span class="muted small">{{ s.ship_to }} · {{ s.territoire }}{% if s.supervisor_id and s.supervisor_id != u.id %} · <em>actuellement : {{ s.sup_name }}</em>{% endif %}{% if not s.active %} · inactive{% endif %}</span></label>
+            <span class="as-txt"><span>{{ s.name }}</span>
+            <span class="muted small">{{ s.ship_to }} · {{ s.territoire }}{% if s.supervisor_id and s.supervisor_id != u.id %} · <em>actuellement : {{ s.sup_name }}</em>{% endif %}{% if not s.active %} · inactive{% endif %}</span></span></label>
         </li>
       {% endfor %}
       </ul>

@@ -89,8 +89,11 @@ def test_login_rate_limited(app):
 def test_new_account_must_change_password(app):
     admin = app.test_client()
     token = login(admin, "admin@x.ma")
-    r = admin.post("/admin/users", data={"csrf": token, "name": "Karim", "email": "karim@x.ma", "password": "Provisoire1"})
+    r = admin.post("/admin/users", data={"csrf": token, "name": "Karim", "email": "karim@x.ma", "password": "Provisoire1",
+                                         "phone": "06 77 88 99 00"})
     assert r.status_code == 302
+    page = admin.get(r.headers["Location"]).get_data(as_text=True)
+    assert "Provisoire1" in page and "https://wa.me/212677889900?text=" in page  # accès envoyés au bon numéro
     sup = app.test_client()
     t2 = login(sup, "karim@x.ma", "Provisoire1")
     assert sup.get("/semaine").headers["Location"].endswith("/compte")

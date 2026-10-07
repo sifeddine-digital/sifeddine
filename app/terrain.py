@@ -217,7 +217,7 @@ def _render_checklist(st, week, data, row, editable):
     return render_template(
         "checklist.html", st=st, week=week, data=data, row=row, editable=editable,
         blocs=BLOCS, elims=ELIMINATOIRES, reponses=REPONSES,
-        prev=prev_data, prev_week=prev["week_start"] if prev else None,
+        prev=prev_data, prev_week=scoring.week_label(scoring.parse_week(prev["week_start"])) if prev else None,
         dotes=dotes, manquants=manquants, seuil_bloc=seuil_bloc, seuil_global=seuil_global,
         today=dt.date.today().isoformat())
 

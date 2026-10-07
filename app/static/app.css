@@ -76,7 +76,8 @@ fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
   white-space: pre-line; font-weight: 500; }
 .flash.error { background: var(--crit-bg); color: var(--crit-fg); }
 .flash.info { background: var(--info-bg); color: var(--info-fg); }
-.flash.credentials { background: #fffaeb; color: var(--text); border: 1px solid #f2d78f; }
+.flash.credentials { background: #fffaeb; color: var(--text); border: 1px solid #f2d78f; white-space: normal; }
+.cred-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .flash.credentials pre { margin: 0 0 10px; white-space: pre-wrap; font: 600 .92rem/1.55 ui-monospace, Menlo, Consolas, monospace; }
 .empty { text-align: center; padding: 40px 10px; color: var(--muted); }
 .back { display: inline-flex; margin: 0 0 6px; text-decoration: none; font-size: .9rem; font-weight: 500; }
@@ -215,9 +216,9 @@ details.prev p { margin: 6px 0 0; }
 .weeknav a:hover { background: var(--hover); border-radius: 99px; }
 .weeknav span { font-weight: 600; font-size: .88rem; padding: 0 4px; white-space: nowrap; }
 .weeknav em { font-style: normal; font-size: .72rem; color: var(--good-fg); background: var(--good-bg); padding: 1px 7px; border-radius: 99px; margin-left: 4px; }
-.dh-bar { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dh-bar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
 .dh-bar select { margin: 0; min-height: 40px; padding-top: 8px; padding-bottom: 8px; font-size: .9rem; }
-.dh-export { grid-column: 1 / -1; display: grid; grid-template-columns: 1.4fr 1fr; gap: 8px; }
+.dh-export { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 8px; }
 .dh-export .btn { min-height: 40px; font-size: .9rem; }
 
 .dash { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
@@ -579,3 +580,24 @@ a.insight:hover { border-color: var(--line-2); }
 .side-brand .logo img { max-width: none; }
 .login-logo img { height: 56px; max-width: none; }
 @media (max-width: 420px) { .logo img { height: 26px; } }
+
+/* Superviseurs : formulaire à gauche, comptes à droite ; historique station */
+.split-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; align-items: start; }
+.split-form > * { min-width: 0; margin: 0; }
+@media (min-width: 1000px) { .split-form { grid-template-columns: 340px minmax(0, 1fr); } }
+.cell-sub { display: block; font-size: .8rem; font-weight: 400; color: var(--muted); overflow-wrap: anywhere; }
+.tbl.hist td { white-space: nowrap; }
+@media (max-width: 760px) {
+  .tbl.stack td.cell-main:has(.cell-sub) { flex-wrap: wrap; justify-content: flex-start; gap: 2px 8px; }
+  .tbl.stack td.cell-main .cell-sub { flex-basis: 100%; text-align: left; }
+}
+@media (min-width: 761px) { .tbl.accounts td.cell-main { min-width: 230px; } .tbl.accounts .cell-sub { overflow-wrap: normal; } }
+fieldset.assign .as-txt { display: flex; flex-direction: column; min-width: 0; line-height: 1.3; }
+fieldset.assign .as-txt .small { font-size: .78rem; }
+.btn.wrap-text { white-space: normal; text-align: center; max-width: 100%; line-height: 1.3; }
+@media (max-width: 380px) {
+  .weeknav { display: flex; width: 100%; }
+  .weeknav span { flex: 1; min-width: 0; white-space: normal; text-align: center; font-size: .8rem; }
+  .dh-export .btn { white-space: normal; padding: 6px 8px; font-size: .84rem; }
+  .twobtn .pill { padding: 8px 8px; }
+}

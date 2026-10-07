@@ -13,6 +13,9 @@ Application web (mobile d'abord) qui remplace la fiche Excel **« LOS Inventaire
   couleurs conditionnelles et listes déroulantes) + `Dashboard` (KPI, tableaux, 4 graphiques), `Historique`
   (stations × semaines) et `Plan d'actions` (avec colonne de suivi).
 
+**Guide d'utilisation** (administrateur et superviseurs, avec captures d'écran) :
+[docs/LOS_Checklist_Guide_utilisation.pdf](docs/LOS_Checklist_Guide_utilisation.pdf).
+
 Les règles de scoring sont celles de la fiche : % par bloc = Oui / (Oui + Non) (N/A ignoré), un « Non »
 éliminatoire ⇒ **Critique**, sinon **À corriger** si global < 85 % ou un bloc < 70 %, sinon **Conforme**
 (seuils modifiables dans l'app).

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ st.name if st else 'Nouvelle station' }}{% endblock %}
+{% block main_class %}wrap mid{% endblock %}
 {% block content %}
 <a class="back" href="{{ url_for('admin.stations') }}">‹ Stations</a>
 <div class="titlebar">
@@ -24,10 +25,10 @@
 </div>
 {% if history %}
 <h2>Historique</h2>
-<div class="table-wrap"><table class="tbl">
+<div class="table-wrap"><table class="tbl hist">
   <thead><tr><th>Semaine</th><th>État</th><th>Propreté</th><th>Service</th><th>Équip.</th><th>Affichage</th><th>HSSE</th><th>Compét.</th><th>Global</th><th>Statut</th></tr></thead>
-  {% for c, dd, sc in history %}
-  <tr><td><a href="{{ url_for('terrain.checklist', station_id=st.id, week=c.week_start) }}">{{ c.week_start }}</a></td>
+  {% for c, dd, sc, wk_no, wk_date in history %}
+  <tr><td><a href="{{ url_for('terrain.checklist', station_id=st.id, week=c.week_start) }}"><strong>{{ wk_no }}</strong></a> <span class="small muted">{{ wk_date }}</span></td>
     <td>{{ 'Envoyée' if c.status == 'envoye' else 'Brouillon' }}</td>
     {% for v in sc.blocs.values() %}<td>{{ pct(v) or '—' }}</td>{% endfor %}
     <td><strong>{{ pct(sc.global) or '—' }}</strong></td>

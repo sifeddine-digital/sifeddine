@@ -14,7 +14,7 @@ from werkzeug.security import generate_password_hash
 from . import scoring
 from .auth import admin_required, current_user, start_session
 from .db import execute, get_db, log, query, secteurs, seuils, set_setting
-from .stats import dashboard as build_dashboard
+from .stats import dashboard as build_dashboard, wa_number
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
 
@@ -117,7 +117,9 @@ def station_edit(station_id=None):
         seuil_bloc, seuil_global = seuils()
         for c in query("SELECT * FROM checklists WHERE station_id = ? ORDER BY week_start DESC LIMIT 12", (st["id"],)):
             d = json.loads(c["data"])
-            history.append((c, d, scoring.score_checklist(d.get("answers"), seuil_bloc, seuil_global)))
+            wk = scoring.parse_week(c["week_start"])
+            history.append((c, d, scoring.score_checklist(d.get("answers"), seuil_bloc, seuil_global),
+                            f"S{wk.isocalendar()[1]:02d}", f"{wk:%d/%m/%Y}"))
     return render_template("admin/station_edit.html", st=st, sups=_supervisors(), secteurs=secteurs(),
                            history=history)
 
@@ -166,7 +168,7 @@ def users():
                 execute("UPDATE stations SET supervisor_id = ? WHERE secteur = ? AND supervisor_id IS NULL",
                         (cur.lastrowid, f["secteur"]))
             log("compte créé", f"{name} <{email}> ({role})")
-            _flash_credentials(email, password)
+            _flash_credentials(email, password, f.get("phone"))
             return redirect(url_for("admin.user_edit", user_id=cur.lastrowid))
     week = scoring.week_start().isoformat()
     rows = query("""SELECT u.*,
@@ -183,10 +185,11 @@ def _gen_password():
     return "".join(secrets.choice(alphabet) for _ in range(10))
 
 
-def _flash_credentials(email, password):
+def _flash_credentials(email, password, phone=None):
     link = request.host_url.rstrip("/") + url_for("auth.login")
+    # le numéro WhatsApp voyage dans la catégorie : « credentials|212600000000 »
     flash(f"Accès à transmettre au superviseur :\nLien : {link}\nEmail : {email}\nMot de passe provisoire : {password}\n"
-          "(il choisira son propre mot de passe à la première connexion)", "credentials")
+          "(il choisira son propre mot de passe à la première connexion)", "credentials|" + wa_number(phone))
 
 
 @bp.route("/users/<int:user_id>", methods=["GET", "POST"])
@@ -225,7 +228,7 @@ def user_edit(user_id):
                     start_session(query("SELECT * FROM users WHERE id = ?", (u["id"],), one=True), True)
                     flash("Votre mot de passe a été changé.", "ok")
                 else:
-                    _flash_credentials(u["email"], password)
+                    _flash_credentials(u["email"], password, u["phone"])
         elif op == "stations":
             ids = [int(i) for i in f.getlist("ids") if i.isdigit()]
             db = get_db()
@@ -242,6 +245,10 @@ def user_edit(user_id):
     grouped = {}
     for s in stations:
         grouped.setdefault(s["secteur"], []).append(s)
+    # secteurs où il a déjà des stations d'abord, puis ceux qui ont des stations libres
+    ordre = sorted(grouped, key=lambda sec: (not any(s["supervisor_id"] == u["id"] for s in grouped[sec]),
+                                            all(s["supervisor_id"] for s in grouped[sec]), sec))
+    grouped = {sec: grouped[sec] for sec in ordre}
     return render_template("admin/user_edit.html", u=u, grouped=grouped)
 
 

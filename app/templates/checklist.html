@@ -63,7 +63,7 @@
     <input type="date" name="visit_date" value="{{ data.visit_date or (today if editable and not row else '') }}" max="{{ today }}">
   </label>
   {% if prev and not data.answers and editable %}
-  <button type="button" class="btn small ghost" id="copy-prev" data-prev='{{ prev.answers | tojson }}'>↺ Reprendre les réponses de la semaine précédente</button>
+  <button type="button" class="btn small ghost wrap-text" id="copy-prev" data-prev='{{ prev.answers | tojson }}'>↺ Reprendre les réponses de la semaine précédente</button>
   {% endif %}
 </div>
 
@@ -88,7 +88,7 @@
   </div>
   {% endfor %}
   {% if prev and (prev.constats[cle] or prev.actions[cle]) %}
-  <details class="prev"><summary>Semaine précédente ({{ prev_week }})</summary>
+  <details class="prev"><summary>Visite précédente · {{ prev_week }}</summary>
     {% if prev.constats[cle] %}<p><strong>Constat :</strong> {{ prev.constats[cle] }}</p>{% endif %}
     {% if prev.actions[cle] %}<p><strong>Action :</strong> {{ prev.actions[cle] }}</p>{% endif %}
   </details>

@@ -91,11 +91,13 @@
 <main class="{% block main_class %}wrap{% endblock %}">
   {% with msgs = get_flashed_messages(with_categories=true) %}
     {% for cat, m in msgs %}
-      {% if cat == 'credentials' %}
+      {% if cat.startswith('credentials') %}
       <div class="flash credentials">
         <pre id="cred">{{ m }}</pre>
-        <button type="button" class="btn small" data-copy="cred">Copier</button>
-        <a class="btn small wa" target="_blank" rel="noopener" href="https://wa.me/?text={{ m | urlencode }}">Envoyer par WhatsApp</a>
+        <div class="cred-actions">
+          <button type="button" class="btn small" data-copy="cred">Copier</button>
+          <a class="btn small wa" target="_blank" rel="noopener" href="https://wa.me/{{ cat.partition('|')[2] }}?text={{ m | urlencode }}">Envoyer par WhatsApp</a>
+        </div>
       </div>
       {% else %}
       <div class="flash {{ cat }}">{{ m }}</div>
