@@ -3,7 +3,7 @@
 {% block main_class %}wrap wide{% endblock %}
 {% block content %}
 <h1>Superviseurs & accès</h1>
-<div class="grid-dash">
+<div class="split-form">
 <section class="card">
   <h2>Nouveau compte</h2>
   <form method="post">
@@ -20,15 +20,16 @@
     <button class="btn primary block">Créer le compte</button>
   </form>
 </section>
-<section class="card span2">
+<section class="card">
   <h2>Comptes</h2>
-  <table class="tbl stack">
-    <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Secteur(s)</th><th>Stations</th><th>Cette semaine</th><th>Dernière connexion</th><th></th></tr></thead>
+  <div class="table-wrap"><table class="tbl stack accounts">
+    <thead><tr><th>Nom</th><th>Rôle</th><th>Secteur(s)</th><th>Stations</th><th>Cette semaine</th><th>Dernière connexion</th><th></th></tr></thead>
     <tbody>
     {% for u in rows %}
     <tr class="{{ 'inactive' if not u.active }}">
-      <td class="cell-main"><strong>{{ u.name }}</strong>{% if not u.active %} <span class="pill todo">désactivé</span>{% endif %}</td>
-      <td data-label="Email">{{ u.email }}</td><td data-label="Rôle">{{ 'Admin' if u.role == 'admin' else 'Superviseur' }}</td>
+      <td class="cell-main"><strong>{{ u.name }}</strong>{% if not u.active %} <span class="pill todo">désactivé</span>{% endif %}
+        <span class="cell-sub">{{ u.email }}</span></td>
+      <td data-label="Rôle">{{ 'Admin' if u.role == 'admin' else 'Superviseur' }}</td>
       <td data-label="Secteur(s)" class="small">{{ (u.secteurs or '—').replace(',', ', ') }}</td>
       <td data-label="Stations">{{ u.n_stations }}</td>
       <td data-label="Cette semaine">{% if u.n_stations %}{{ u.n_done }}/{{ u.n_stations }}{% else %}—{% endif %}</td>
@@ -37,7 +38,7 @@
     </tr>
     {% endfor %}
     </tbody>
-  </table>
+  </table></div>
 </section>
 </div>
 {% endblock %}

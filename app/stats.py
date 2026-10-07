@@ -8,6 +8,16 @@ from .db import query, seuils
 from .referentiel import BLOC_NOMS_COURTS, BLOCS, ELIMINATOIRES, LIBELLES, TOUS_LES_POINTS
 
 
+def wa_number(phone):
+    """Numéro au format attendu par wa.me (chiffres seuls, 06… -> 2126…)."""
+    digits = "".join(ch for ch in (phone or "") if ch.isdigit())
+    if digits.startswith("00"):
+        digits = digits[2:]
+    elif digits.startswith("0"):
+        digits = "212" + digits[1:]  # numéro marocain local -> international
+    return digits
+
+
 def filtered_stations(secteur=None, sup_id=None):
     sql = ("SELECT s.*, u.name AS sup_name FROM stations s LEFT JOIN users u ON u.id = s.supervisor_id "
            "WHERE s.active = 1")
@@ -154,10 +164,7 @@ def dashboard(week, secteur=None, sup_id=None, trend_weeks=8):
             continue
         msg = (f"Bonjour {u['name'].split(' ')[0]}, rappel checklist LOS ({scoring.week_label(week)}) : "
                f"{len(names)} station(s) restante(s) : " + ", ".join(names) + ". Merci !")
-        digits = "".join(ch for ch in (u["phone"] or "") if ch.isdigit())
-        if digits.startswith("0"):
-            digits = "212" + digits[1:]  # numéro marocain local -> international
-        relances[sid] = {"n": len(names), "text": msg, "phone": digits}
+        relances[sid] = {"n": len(names), "text": msg, "phone": wa_number(u["phone"])}
 
     cweeks, ctable = weekly_compliance(stations, week)
     strips = {row["sup_id"]: list(zip(cweeks, row["cells"])) for row in ctable}
