@@ -226,3 +226,14 @@ def test_export_import_round_trip(app, tmp_path):
         assert "2 lues" in report[0]
         row = query("SELECT * FROM checklists", one=True)
         assert row["week_start"] == week.isoformat() and row["statut"] == "À corriger"
+
+
+def test_switch_account_from_login_page(app):
+    c = app.test_client()
+    login(c, "admin@x.ma")
+    r = c.get("/login")
+    assert r.status_code == 200 and "Vous êtes connecté en tant que" in r.get_data(as_text=True)
+    login(c, "sup@x.ma")  # même navigateur : on passe au compte superviseur
+    page = c.get("/semaine").get_data(as_text=True)
+    assert "SHELL A" in page and "SHELL B" not in page
+    assert c.get("/admin/").status_code == 403

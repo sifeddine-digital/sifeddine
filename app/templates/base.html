@@ -10,7 +10,7 @@
   <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon.svg') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
 </head>
-{% set u = current_user() %}
+{% set u = current_user() if not hide_chrome else none %}
 {% set ep = request.endpoint or '' %}
 {% macro brand() -%}
   <a class="brand" href="{{ url_for('auth.index') }}"><span class="logo"><img src="{{ logo_url }}" alt="" data-fallback="LOS"></span><span class="brand-text">LOS Checklist</span></a>
