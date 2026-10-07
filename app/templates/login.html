@@ -3,9 +3,15 @@
 {% block body_class %}login-page{% endblock %}
 {% block content %}
 <div class="login-card">
-  <div class="login-logo"><img src="{{ logo_url }}" alt="Shell" data-fallback="LOS"></div>
+  <div class="login-logo"><img src="{{ logo_url }}" alt="Logo" data-fallback="LOS"></div>
   <h1>Checklist Lubrifiants</h1>
+  {% if connected %}
+  <div class="flash info">Vous êtes connecté en tant que <strong>{{ connected.name }}</strong> ({{ connected.email }}).
+    <a class="btn small primary" href="{{ url_for('auth.index') }}">Continuer</a></div>
+  <p class="muted">Ou connectez-vous avec un autre compte (par exemple un superviseur) :</p>
+  {% else %}
   <p class="muted">Connectez-vous avec l'email et le mot de passe reçus de votre administrateur.</p>
+  {% endif %}
   <form method="post">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
     <label>Email

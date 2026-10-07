@@ -88,14 +88,12 @@ def index():
 
 @bp.route("/login", methods=["GET", "POST"])
 def login():
-    if current_user() is not None and request.method == "GET":
-        return redirect(url_for("auth.index"))
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         keys = ("ip:" + (request.remote_addr or ""), "email:" + email)
         if _blocked(*keys):
             flash("Trop de tentatives. Réessayez dans 15 minutes.", "error")
-            return render_template("login.html"), 429
+            return render_template("login.html", hide_chrome=True), 429
         user = query("SELECT * FROM users WHERE email = ? AND active = 1", (email,), one=True)
         if user and check_password_hash(user["password_hash"], request.form.get("password", "")):
             for k in keys:
@@ -109,7 +107,9 @@ def login():
             _failed.setdefault(k, []).append(time.time())
         log("échec connexion", email[:120], None)
         flash("Email ou mot de passe incorrect.", "error")
-    return render_template("login.html")
+    # déjà connecté (ex. l'admin veut tester un compte superviseur) : on propose de continuer
+    # ou de se connecter avec un autre compte, au lieu de rediriger d'office.
+    return render_template("login.html", hide_chrome=True, connected=current_user())
 
 
 @bp.route("/logout", methods=["POST"])
