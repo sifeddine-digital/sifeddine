@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1f4e23">
+  <title>{% block title %}LOS Checklist{% endblock %}</title>
+  <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+  <link rel="icon" href="{{ url_for('static', filename='icon.svg') }}" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body class="{% block body_class %}{% endblock %}">
+{% set u = current_user() %}
+{% if u %}
+<header class="topbar">
+  <a class="brand" href="{{ url_for('auth.index') }}"><span class="logo">LOS</span> Checklist</a>
+  {% if u.role == 'admin' %}
+  <nav class="adminnav">
+    <a href="{{ url_for('admin.dashboard') }}" class="{{ 'on' if request.endpoint == 'admin.dashboard' }}">Tableau de bord</a>
+    <a href="{{ url_for('terrain.semaine') }}" class="{{ 'on' if request.endpoint in ('terrain.semaine','terrain.checklist') }}">Checklists</a>
+    <a href="{{ url_for('terrain.mois') }}" class="{{ 'on' if request.endpoint in ('terrain.mois','terrain.inventaire','terrain.stock') }}">Inventaire & stock</a>
+    <a href="{{ url_for('admin.stations') }}" class="{{ 'on' if request.endpoint in ('admin.stations','admin.station_edit') }}">Stations</a>
+    <a href="{{ url_for('admin.users') }}" class="{{ 'on' if request.endpoint in ('admin.users','admin.user_edit') }}">Superviseurs</a>
+    <a href="{{ url_for('admin.export') }}" class="{{ 'on' if request.endpoint == 'admin.export' }}">Export Excel</a>
+  </nav>
+  {% endif %}
+  <details class="usermenu">
+    <summary title="{{ u.email }}">{{ u.name.split(' ')[0] }} ▾</summary>
+    <div class="menu">
+      <div class="muted small">{{ u.email }}</div>
+      {% if u.role == 'admin' %}
+      <a href="{{ url_for('admin.import_view') }}">Importer la fiche Excel</a>
+      <a href="{{ url_for('admin.settings') }}">Seuils de scoring</a>
+      {% endif %}
+      <a href="{{ url_for('auth.compte') }}">Changer mon mot de passe</a>
+      <form method="post" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button class="linkbtn">Se déconnecter</button>
+      </form>
+    </div>
+  </details>
+</header>
+{% endif %}
+
+<main class="{% block main_class %}wrap{% endblock %}">
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, m in msgs %}
+      {% if cat == 'credentials' %}
+      <div class="flash credentials">
+        <pre id="cred">{{ m }}</pre>
+        <button type="button" class="btn small" data-copy="cred">Copier</button>
+        <a class="btn small wa" target="_blank" rel="noopener" href="https://wa.me/?text={{ m | urlencode }}">Envoyer par WhatsApp</a>
+      </div>
+      {% else %}
+      <div class="flash {{ cat }}">{{ m }}</div>
+      {% endif %}
+    {% endfor %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+
+{% if u and u.role != 'admin' %}
+<nav class="bottomnav">
+  <a href="{{ url_for('terrain.semaine') }}" class="{{ 'on' if request.endpoint in ('terrain.semaine','terrain.checklist') }}"><span>✓</span>Checklist</a>
+  <a href="{{ url_for('terrain.mois') }}" class="{{ 'on' if request.endpoint in ('terrain.mois','terrain.inventaire','terrain.stock') }}"><span>▤</span>Inventaire</a>
+  <a href="{{ url_for('auth.compte') }}" class="{{ 'on' if request.endpoint == 'auth.compte' }}"><span>●</span>Compte</a>
+</nav>
+{% endif %}
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

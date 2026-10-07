@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Tableau de bord — {{ week_label(week) }}{% endblock %}
+{% block main_class %}wrap wide{% endblock %}
+{% macro bar(v, cls='') -%}
+<div class="minibar {{ cls }}"><i style="width: {{ ((v or 0) * 100) | round(0) }}%"></i><span>{{ pct(v) or '—' }}</span></div>
+{%- endmacro %}
+{% macro scorecls(v) -%}{{ '' if v is none else 'ok' if v >= seuil_global else 'warn' if v >= seuil_bloc else 'crit' }}{%- endmacro %}
+{% block content %}
+<form class="filters" method="get">
+  <div class="pager compact">
+    <a class="btn ghost" href="{{ url_for('admin.dashboard', w=prev_week.isoformat(), secteur=secteur or '', sup=sup or '') }}">‹</a>
+    <div class="pager-label"><strong>{{ week_label(week) }}</strong></div>
+    <a class="btn ghost" href="{{ url_for('admin.dashboard', w=next_week.isoformat(), secteur=secteur or '', sup=sup or '') }}">›</a>
+  </div>
+  <input type="hidden" name="w" value="{{ week.isoformat() }}">
+  <select name="secteur" onchange="this.form.submit()">
+    <option value="">Tous les secteurs</option>
+    {% for s in secteurs %}<option {{ 'selected' if s == secteur }}>{{ s }}</option>{% endfor %}
+  </select>
+  <select name="sup" onchange="this.form.submit()">
+    <option value="">Tous les superviseurs</option>
+    <option value="none" {{ 'selected' if sup == 'none' }}>— Non assignées —</option>
+    {% for u in sups %}<option value="{{ u.id }}" {{ 'selected' if sup == u.id|string }}>{{ u.name }}</option>{% endfor %}
+  </select>
+  <a class="btn primary" href="{{ url_for('admin.export', w=week.isoformat()) }}">⬇ Export Excel</a>
+</form>
+
+{% set k = d.kpi %}
+<div class="kpis">
+  <div class="kpi"><span>Stations</span><strong>{{ k.stations }}</strong></div>
+  <div class="kpi"><span>Envoyées</span><strong>{{ k.envoyees }}</strong><em>{{ k.brouillons }} brouillon(s)</em></div>
+  <div class="kpi"><span>Complétion</span><strong>{{ pct(k.completion) or '0 %' }}</strong>{{ bar(k.completion) }}</div>
+  <div class="kpi"><span>Score moyen</span><strong class="{{ scorecls(k.score) }}">{{ pct(k.score) or '—' }}</strong></div>
+  <div class="kpi crit"><span>Critique</span><strong>{{ k.critique }}</strong></div>
+  <div class="kpi warn"><span>À corriger</span><strong>{{ k.a_corriger }}</strong></div>
+  <div class="kpi ok"><span>Conforme</span><strong>{{ k.conforme }}</strong></div>
+</div>
+
+<div class="grid-dash">
+  <section class="card span2">
+    <h2>Par secteur</h2>
+    <div class="table-wrap"><table class="tbl">
+      <thead><tr><th>Secteur</th><th>Stations</th><th>Complétion</th><th>Score</th>
+        {% for c in ('Propreté','Service','Équip.','Affichage','HSSE','Compét.') %}<th>{{ c }}</th>{% endfor %}
+        <th class="c-crit">Crit.</th><th class="c-warn">À corr.</th><th class="c-ok">Conf.</th></tr></thead>
+      <tbody>
+      {% for name, g in d.by_secteur %}
+        <tr><td><a href="{{ url_for('admin.dashboard', w=week.isoformat(), secteur=name) }}">{{ name }}</a></td>
+          <td>{{ g.envoyees }}/{{ g.stations }}</td><td>{{ bar(g.completion) }}</td>
+          <td class="sc {{ scorecls(g.score) }}">{{ pct(g.score) or '—' }}</td>
+          {% for v in g.blocs.values() %}<td class="sc {{ scorecls(v) }}">{{ pct(v) or '—' }}</td>{% endfor %}
+          <td>{{ g.critique or '' }}</td><td>{{ g.a_corriger or '' }}</td><td>{{ g.conforme or '' }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <h2>Par superviseur</h2>
+    <div class="table-wrap"><table class="tbl">
+      <thead><tr><th>Superviseur</th><th>Faites</th><th>Complétion</th><th>Score</th></tr></thead>
+      <tbody>
+      {% for name, g in d.by_sup %}
+        <tr><td>{{ name }}</td><td>{{ g.envoyees }}/{{ g.stations }}</td><td>{{ bar(g.completion) }}</td>
+          <td class="sc {{ scorecls(g.score) }}">{{ pct(g.score) or '—' }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <h2>Score moyen par bloc</h2>
+    {% for name, v in [('Propreté', k.blocs.proprete), ('Service', k.blocs.service), ('Équipements', k.blocs.equipements), ('Affichage', k.blocs.affichage), ('HSSE', k.blocs.hsse), ('Compétences', k.blocs.competences)] %}
+      <div class="hbar"><span>{{ name }}</span>{{ bar(v, scorecls(v)) }}</div>
+    {% endfor %}
+  </section>
+
+  <section class="card">
+    <h2>Évolution (8 semaines)</h2>
+    {% set maxh = 120 %}
+    <div class="trend">
+      {% for t in d.trend %}
+      <div class="tcol" title="{{ week_label(t.week) }} — complétion {{ pct(t.completion) }}, score {{ pct(t.score) or '—' }}">
+        <div class="tbars">
+          <i class="c" style="height: {{ ((t.completion or 0) * maxh) | round(0) }}px"></i>
+          <i class="s" style="height: {{ ((t.score or 0) * maxh) | round(0) }}px"></i>
+        </div>
+        <span>S{{ '%02d' % t.week.isocalendar()[1] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="legend"><span><i class="c"></i>Complétion</span><span><i class="s"></i>Score moyen</span></div>
+  </section>
+
+  <section class="card">
+    <h2>Points les plus souvent en « Non »</h2>
+    {% if d.top_non %}
+    <table class="tbl compact">
+      {% for t in d.top_non %}<tr><td>{{ t.libelle }}</td><td class="num">{{ t.non }}</td><td style="width:40%">{{ bar(t.taux, 'crit') }}</td></tr>{% endfor %}
+    </table>
+    {% else %}<p class="muted">Aucun « Non » cette semaine.</p>{% endif %}
+  </section>
+
+  <section class="card">
+    <h2 class="c-crit">Stations critiques ({{ d.critiques|length }})</h2>
+    {% for c in d.critiques %}
+      <div class="li"><a href="{{ url_for('terrain.checklist', station_id=c.station.id, week=week.isoformat()) }}"><strong>{{ c.station.name }}</strong></a>
+        <span class="muted small">{{ c.station.secteur }} · {{ c.station.sup_name or 'non assignée' }}</span>
+        <div class="small red">{{ c.elims | join(' · ') }}</div></div>
+    {% else %}<p class="muted">Aucune station critique.</p>{% endfor %}
+  </section>
+
+  <section class="card">
+    <h2>Non faites ({{ d.non_faites|length }})</h2>
+    <div class="scroll">
+    {% for s in d.non_faites %}
+      <div class="li"><a href="{{ url_for('terrain.checklist', station_id=s.id, week=week.isoformat()) }}">{{ s.name }}</a>
+        <span class="muted small">{{ s.secteur }} · {{ s.sup_name or 'non assignée' }}</span></div>
+    {% else %}<p class="muted">Tout est fait 🎉</p>{% endfor %}
+    </div>
+  </section>
+
+  <section class="card span2">
+    <h2>Plan d'actions de la semaine ({{ d.actions|length }})</h2>
+    <div class="table-wrap scroll"><table class="tbl">
+      <thead><tr><th>Station</th><th>Bloc</th><th>Points</th><th>Constat</th><th>Action</th><th>Responsable / Échéance</th></tr></thead>
+      <tbody>
+      {% for a in d.actions %}
+        <tr><td><a href="{{ url_for('terrain.checklist', station_id=a.station.id, week=week.isoformat()) }}">{{ a.station.name }}</a></td>
+          <td>{{ a.bloc }}</td><td>{{ a.points | join(', ') }}</td><td class="txt">{{ a.constat }}</td><td class="txt">{{ a.action }}</td><td class="txt">{{ a.responsable }}</td></tr>
+      {% else %}<tr><td colspan="6" class="muted">Aucune action.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}

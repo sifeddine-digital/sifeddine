@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ u.name }}{% endblock %}
+{% block main_class %}wrap wide{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('admin.users') }}">‹ Superviseurs</a>
+<h1>{{ u.name }}</h1>
+<div class="grid-dash">
+<section class="card">
+  <h2>Profil</h2>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="op" value="profile">
+    <label>Nom <input name="name" value="{{ u.name }}" required></label>
+    <label>Email (identifiant) <input type="email" name="email" value="{{ u.email }}" required></label>
+    <label>Téléphone <input name="phone" value="{{ u.phone or '' }}"></label>
+    <label>Rôle <select name="role">
+      <option value="superviseur" {{ 'selected' if u.role == 'superviseur' }}>Superviseur</option>
+      <option value="admin" {{ 'selected' if u.role == 'admin' }}>Administrateur</option></select></label>
+    <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if u.active }}> Compte actif (décocher pour bloquer l'accès)</label>
+    <button class="btn primary block">Enregistrer</button>
+  </form>
+  <hr>
+  <h2>Mot de passe</h2>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="op" value="password">
+    <label>Nouveau mot de passe <input name="password" placeholder="Vide = généré automatiquement" minlength="8"></label>
+    <button class="btn ghost block">Réinitialiser et afficher les accès</button>
+  </form>
+</section>
+
+<section class="card span2">
+  <h2>Stations affectées <span class="muted small">— cochez les stations dont {{ u.name }} est responsable</span></h2>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="op" value="stations">
+    <input class="search" type="search" placeholder="Filtrer…" data-filter=".assign li">
+    {% for secteur, stations in grouped.items() %}
+    <fieldset class="assign">
+      <legend><label class="check"><input type="checkbox" data-check-group="{{ loop.index }}"> <strong>{{ secteur }}</strong>
+        <span class="muted small">({{ stations|length }})</span></label></legend>
+      <ul>
+      {% for s in stations %}
+        <li data-text="{{ (s.name ~ ' ' ~ s.ship_to ~ ' ' ~ s.territoire) | lower }}">
+          <label class="check"><input type="checkbox" name="ids" value="{{ s.id }}" {{ 'checked' if s.supervisor_id == u.id }}>
+            {{ s.name }} <span class="muted small">{{ s.ship_to }} · {{ s.territoire }}{% if s.supervisor_id and s.supervisor_id != u.id %} · <em>actuellement : {{ s.sup_name }}</em>{% endif %}{% if not s.active %} · inactive{% endif %}</span></label>
+        </li>
+      {% endfor %}
+      </ul>
+    </fieldset>
+    {% endfor %}
+    <div class="actionbar"><button class="btn primary">Enregistrer l'affectation</button></div>
+  </form>
+</section>
+</div>
+{% endblock %}

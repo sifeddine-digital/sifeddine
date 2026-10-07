@@ -1,0 +1,9 @@
+{
+  "name": "LOS Checklist",
+  "short_name": "LOS Checklist",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f3f5f4",
+  "theme_color": "#1f4e23",
+  "icons": [{ "src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

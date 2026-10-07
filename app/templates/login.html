@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Connexion — LOS Checklist{% endblock %}
+{% block body_class %}login-page{% endblock %}
+{% block content %}
+<div class="login-card">
+  <div class="login-logo">LOS</div>
+  <h1>Checklist Lubrifiants</h1>
+  <p class="muted">Connectez-vous avec l'email et le mot de passe reçus de votre administrateur.</p>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Email
+      <input type="email" name="email" autocomplete="username" inputmode="email" required autofocus value="{{ request.form.email or '' }}">
+    </label>
+    <label>Mot de passe
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <label class="check"><input type="checkbox" name="remember" value="1" checked> Rester connecté 30 jours</label>
+    <button class="btn primary block">Se connecter</button>
+  </form>
+</div>
+{% endblock %}

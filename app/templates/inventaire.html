@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}{{ st.name }} — Équipements{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('terrain.mois', m=month.isoformat()) }}">‹ Retour</a>
+<div class="st-head">
+  <h1>{{ st.name }}</h1>
+  <div class="muted">{{ st.ship_to }} · {{ st.secteur }}</div>
+  <div class="small"><strong>Inventaire équipements — {{ month_label(month) }}</strong></div>
+</div>
+{% if prefilled %}<div class="flash info">Pré-rempli avec le dernier inventaire connu ({{ row.month[:7] }}). Vérifiez et enregistrez.</div>{% endif %}
+{% if not editable %}<div class="flash info">Lecture seule : mois clôturé.</div>{% endif %}
+<form method="post" id="invform">
+<input type="hidden" name="csrf" value="{{ csrf_token }}">
+<fieldset {{ 'disabled' if not editable }}>
+<div class="card">
+  <label>Statut relevé
+    <select name="statut">
+      <option value="">—</option>
+      {% for s in statuts %}<option {{ 'selected' if row and row.statut == s }}>{{ s }}</option>{% endfor %}
+    </select>
+  </label>
+  <div class="item"><div class="item-label"><strong>Baie de vidange ?</strong></div>
+    <div class="seg">{% for v in ('Oui','Non') %}<input type="radio" id="baie{{ v }}" name="baie" value="{{ v }}" {{ 'checked' if row and row.baie == v }}><label for="baie{{ v }}" class="{{ 'o' if v == 'Oui' else 'n' }}">{{ v }}</label>{% endfor %}</div></div>
+  <div class="item needs-baie"><div class="item-label"><strong>SHSC ?</strong> <span class="muted small">(Shell Helix Service Centre)</span></div>
+    <div class="seg">{% for v in ('Oui','Non') %}<input type="radio" id="shsc{{ v }}" name="shsc" value="{{ v }}" {{ 'checked' if row and row.shsc == v }}><label for="shsc{{ v }}" class="{{ 'o' if v == 'Oui' else 'n' }}">{{ v }}</label>{% endfor %}</div></div>
+</div>
+{% for bloc, titre, its in equipements %}
+<section class="card bloc needs-baie">
+  <h2>{{ titre }}</h2>
+  {% if editable %}<button type="button" class="btn tiny ghost all-yes">Tout « Oui »</button>{% endif %}
+  {% for key, label, need in its %}
+  <div class="item {{ 'needs-shsc' if need == 'shsc' }}"><div class="item-label">{{ label }}</div>
+    <div class="seg">{% for v in ('Oui','Non') %}<input type="radio" id="eq_{{ key }}{{ v }}" name="eq_{{ key }}" value="{{ v }}" {{ 'checked' if items.get(key) == v }}><label for="eq_{{ key }}{{ v }}" class="{{ 'o' if v == 'Oui' else 'n' }}">{{ v }}</label>{% endfor %}</div>
+  </div>
+  {% endfor %}
+</section>
+{% endfor %}
+</fieldset>
+{% if editable %}<div class="actionbar"><button class="btn primary">Enregistrer l'inventaire</button></div>{% endif %}
+</form>
+{% endblock %}

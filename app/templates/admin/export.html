@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Export Excel{% endblock %}
+{% block content %}
+<h1>Export Excel</h1>
+<div class="card narrow">
+  <p>Le fichier reprend la mise en page de la fiche (onglets <em>Checklist</em>, <em>Invt_Eqmt</em>, <em>Invt_Stck</em> avec formules,
+  couleurs et listes déroulantes) et ajoute :</p>
+  <ul class="small">
+    <li><strong>Dashboard</strong> : KPI, tableau par secteur et par superviseur, taux de « Non » par point, dotation équipements, fiabilité stock, 4 graphiques ;</li>
+    <li><strong>Historique</strong> : toutes les stations × semaines (scores par bloc, statut, état envoyée / brouillon / non faite) ;</li>
+    <li><strong>Plan d'actions</strong> : chaque bloc en « Non » avec constat, action, responsable et une colonne de suivi.</li>
+  </ul>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Semaine
+      <select name="week">
+        {% for w in weeks %}<option value="{{ w.isoformat() }}" {{ 'selected' if current == w.isoformat() }}>{{ week_label(w) }}</option>{% endfor %}
+      </select></label>
+    <label>Historique sur
+      <select name="weeks">{% for n in (4, 8, 12, 26, 52) %}<option value="{{ n }}" {{ 'selected' if n == 8 }}>{{ n }} semaines</option>{% endfor %}</select></label>
+    <fieldset class="assign"><legend><label class="check"><input type="checkbox" checked data-check-group="1"> <strong>Secteurs</strong></label></legend>
+      <ul>{% for s in secteurs %}<li><label class="check"><input type="checkbox" name="secteurs" value="{{ s }}" checked> {{ s }}</label></li>{% endfor %}</ul>
+    </fieldset>
+    <button class="btn primary block">⬇ Télécharger le fichier Excel</button>
+  </form>
+</div>
+{% endblock %}

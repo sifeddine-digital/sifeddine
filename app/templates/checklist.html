@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}{{ st.name }} — Checklist{% endblock %}
+{% macro choice(code, value) -%}
+  {% set cur = (data.answers or {}).get(code) %}
+  <div class="seg" role="radiogroup">
+    {% for r in reponses %}
+    <input type="radio" id="r_{{ code }}_{{ loop.index }}" name="r_{{ code }}" value="{{ r }}" {{ 'checked' if cur == r }}>
+    <label for="r_{{ code }}_{{ loop.index }}" class="{{ 'o' if r == 'Oui' else 'n' if r == 'Non' else 'na' }}">{{ r }}</label>
+    {% endfor %}
+  </div>
+{%- endmacro %}
+{% block content %}
+<a class="back" href="{{ url_for('terrain.semaine', w=week.isoformat()) }}">‹ Retour à la semaine</a>
+<div class="st-head">
+  <h1>{{ st.name }}</h1>
+  <div class="muted">{{ st.ship_to }} · {{ st.secteur }} · {{ st.territoire }}</div>
+  <div class="small"><strong>{{ week_label(week) }}</strong>
+    {% if row %} · <span class="pill {{ 'ok' if row.status == 'envoye' else 'draft' }}">{{ 'Envoyée' if row.status == 'envoye' else 'Brouillon' }}</span>
+      <span class="muted">maj {{ row.updated_at[:16] }}</span>{% endif %}
+    {% if row and row.locked %}<span class="pill crit">Verrouillée</span>{% endif %}
+  </div>
+</div>
+
+{% if current_user().role == 'admin' and row %}
+<div class="admin-tools card">
+  <form method="post" action="{{ url_for('admin.checklist_lock', checklist_id=row.id) }}" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <button class="btn small ghost">{{ 'Déverrouiller' if row.locked else 'Verrouiller' }}</button>
+  </form>
+  {% if row.status == 'envoye' %}
+  <form method="post" action="{{ url_for('admin.checklist_lock', checklist_id=row.id) }}" class="inline">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="op" value="reopen">
+    <button class="btn small ghost">Renvoyer au superviseur pour correction</button>
+  </form>
+  {% endif %}
+  {% if row.lat %}<a class="small" target="_blank" rel="noopener" href="https://www.google.com/maps?q={{ row.lat }},{{ row.lng }}">📍 Position à l'envoi</a>{% endif %}
+</div>
+{% endif %}
+
+{% if not editable %}<div class="flash info">Lecture seule : cette semaine est clôturée{{ ' (verrouillée par l’admin)' if row and row.locked }}.</div>{% endif %}
+
+<div class="scorebar" id="scorebar" data-seuil-bloc="{{ seuil_bloc }}" data-seuil-global="{{ seuil_global }}">
+  <div><span class="muted small">Score global</span><strong id="sc-global">—</strong></div>
+  <div><span class="muted small">Réponses</span><strong id="sc-count">0/{{ 20 }}</strong></div>
+  <div><span id="sc-statut" class="pill">—</span></div>
+</div>
+
+<form method="post" id="ckform" data-draft-key="ck-{{ st.id }}-{{ week.isoformat() }}" novalidate>
+<input type="hidden" name="csrf" value="{{ csrf_token }}">
+<input type="hidden" name="lat"><input type="hidden" name="lng">
+<fieldset {{ 'disabled' if not editable }}>
+
+<div class="card">
+  <label>Date de visite
+    <input type="date" name="visit_date" value="{{ data.visit_date or (today if editable and not row else '') }}" max="{{ today }}">
+  </label>
+  {% if prev and not data.answers and editable %}
+  <button type="button" class="btn small ghost" id="copy-prev" data-prev='{{ prev.answers | tojson }}'>↺ Reprendre les réponses de la semaine précédente</button>
+  {% endif %}
+</div>
+
+<section class="card bloc elim" data-bloc="elim">
+  <h2>Points éliminatoires <span class="muted small">— un seul « Non » = Critique</span></h2>
+  {% for code, lib in elims %}
+  <div class="item"><div class="item-label">{{ lib }}</div>{{ choice(code) }}</div>
+  {% endfor %}
+</section>
+
+{% for cle, titre, items in blocs %}
+<section class="card bloc" data-bloc="{{ cle }}">
+  <h2>{{ titre }} <span class="bloc-score pill" data-score-for="{{ cle }}">—</span></h2>
+  {% if editable %}<button type="button" class="btn tiny ghost all-yes" data-bloc="{{ cle }}">Tout « Oui »</button>{% endif %}
+  {% if cle == 'equipements' %}
+    <div class="hint">Inventaire du mois :
+      {% if dotes is none %}<em>non renseigné ou station sans baie</em>
+      {% else %}<strong>{{ dotes }}</strong> équipements dotés · <strong class="{{ 'red' if manquants }}">{{ manquants }}</strong> manquants{% endif %}
+    </div>
+  {% endif %}
+  {% for code, lib, aide in items %}
+  <div class="item" data-code="{{ code }}">
+    <div class="item-label">{{ lib }}{% if aide %} <details class="aide"><summary>?</summary><p>{{ aide }}</p></details>{% endif %}</div>
+    {{ choice(code) }}
+  </div>
+  {% endfor %}
+  {% if prev and (prev.constats[cle] or prev.actions[cle]) %}
+  <details class="prev"><summary>Semaine précédente ({{ prev_week }})</summary>
+    {% if prev.constats[cle] %}<p><strong>Constat :</strong> {{ prev.constats[cle] }}</p>{% endif %}
+    {% if prev.actions[cle] %}<p><strong>Action :</strong> {{ prev.actions[cle] }}</p>{% endif %}
+  </details>
+  {% endif %}
+  <div class="obs">
+    <label>Constat <span class="req">obligatoire si « Non »</span>
+      <textarea name="constat_{{ cle }}" rows="2">{{ (data.constats or {}).get(cle, '') }}</textarea></label>
+    <label>Action
+      <textarea name="action_{{ cle }}" rows="2">{{ (data.actions or {}).get(cle, '') }}</textarea></label>
+  </div>
+</section>
+{% endfor %}
+
+<section class="card">
+  <h2>Synthèse</h2>
+  <label>Responsable / Échéance
+    <textarea name="responsable" rows="2" placeholder="Ex. Gérant (rappel EPI) — immédiatement / Vivo Energy (réparation pont) — sous 15 jours">{{ data.responsable or '' }}</textarea></label>
+  <label>Commentaire
+    <textarea name="commentaire" rows="3">{{ data.commentaire or '' }}</textarea></label>
+</section>
+</fieldset>
+
+{% if editable %}
+<div class="actionbar">
+  <button class="btn ghost" name="action" value="brouillon">Enregistrer</button>
+  <button class="btn primary" name="action" value="envoyer" id="send-btn">Envoyer la checklist</button>
+</div>
+{% endif %}
+</form>
+{% endblock %}

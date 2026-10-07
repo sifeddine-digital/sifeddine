@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ st.name }} — Stock{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('terrain.mois', m=month.isoformat()) }}">‹ Retour</a>
+<div class="st-head">
+  <h1>{{ st.name }}</h1>
+  <div class="muted">{{ st.ship_to }} · {{ st.secteur }}</div>
+  <div class="small"><strong>Stock lubrifiants — {{ month_label(month) }}</strong></div>
+</div>
+{% if not editable %}<div class="flash info">Lecture seule : mois clôturé.</div>{% endif %}
+<form method="post" id="stockform">
+<input type="hidden" name="csrf" value="{{ csrf_token }}">
+<fieldset {{ 'disabled' if not editable }}>
+<div class="card">
+  <p class="hint">« Stock fiable = Oui » : le stock physique correspond au stock système (écart toléré ≤ 5 %).</p>
+  <div class="grid2">
+    <label>Stock physique (L)<input type="number" step="0.01" min="0" inputmode="decimal" name="stock_physique" value="{{ row.stock_physique if row and row.stock_physique is not none else '' }}"></label>
+    <label>Stock système (L)<input type="number" step="0.01" min="0" inputmode="decimal" name="stock_systeme" value="{{ row.stock_systeme if row and row.stock_systeme is not none else '' }}"></label>
+  </div>
+  <div class="hint" id="ecart">Écart : —</div>
+  <div class="item"><div class="item-label"><strong>Stock fiable ?</strong></div>
+    <div class="seg">{% for v in ('Oui','Non') %}<input type="radio" id="f{{ v }}" name="fiable" value="{{ v }}" {{ 'checked' if row and row.fiable == v }}><label for="f{{ v }}" class="{{ 'o' if v == 'Oui' else 'n' }}">{{ v }}</label>{% endfor %}</div></div>
+  <label>Méthode d'obtention
+    <select name="methode"><option value="">—</option>
+      {% for m in methodes %}<option {{ 'selected' if row and row.methode == m }}>{{ m }}</option>{% endfor %}</select></label>
+  <div class="grid2">
+    <label>Date du dernier inventaire<input type="date" name="date_inventaire" value="{{ row.date_inventaire if row else '' }}"></label>
+    <label>Fréquence d'inventaire
+      <select name="frequence"><option value="">—</option>
+        {% for f in frequences %}<option {{ 'selected' if row and row.frequence == f }}>{{ f }}</option>{% endfor %}</select></label>
+  </div>
+  <label>Commentaire <span class="req">obligatoire si « Non », « Refus » ou « Aucun inventaire »</span>
+    <textarea name="commentaire" rows="3">{{ row.commentaire if row else '' }}</textarea></label>
+</div>
+</fieldset>
+{% if editable %}<div class="actionbar"><button class="btn primary">Enregistrer le stock</button></div>{% endif %}
+</form>
+{% endblock %}
