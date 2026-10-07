@@ -3,7 +3,7 @@ import os
 import secrets
 
 import click
-from flask import Flask, abort, request, session
+from flask import Flask, abort, request, session, url_for
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash
 
@@ -44,7 +44,7 @@ def create_app(test_config=None):
     def _inject():
         if "csrf" not in session:
             session["csrf"] = secrets.token_urlsafe(32)
-        return {"csrf_token": session["csrf"], "pct": scoring.pct,
+        return {"csrf_token": session["csrf"], "pct": scoring.pct, "logo_url": _logo_url(app),
                 "week_label": scoring.week_label, "month_label": scoring.month_label}
 
     from .auth import bp as auth_bp, current_user
@@ -57,6 +57,16 @@ def create_app(test_config=None):
 
     _register_cli(app)
     return app
+
+
+LOGO_URL_DEFAUT = "https://sc.atzer-ma.com/img/shell.svg"
+
+
+def _logo_url(app):
+    """Logo local (static/img/shell.svg) s'il existe, sinon LOGO_URL ou le logo en ligne."""
+    if os.path.exists(os.path.join(app.static_folder, "img", "shell.svg")):
+        return url_for("static", filename="img/shell.svg")
+    return os.environ.get("LOGO_URL", LOGO_URL_DEFAUT)
 
 
 def _bootstrap_admin():
