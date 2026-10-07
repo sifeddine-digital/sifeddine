@@ -14,6 +14,17 @@
     });
   });
 
+  // ---- filtre À faire / Envoyées (liste de la semaine)
+  var fc = $("#filterchips");
+  if (fc) fc.addEventListener("click", function (e) {
+    var b = e.target.closest("button");
+    if (!b) return;
+    $$("button", fc).forEach(function (x) { x.classList.toggle("on", x === b); });
+    $$(".station-list li[data-state]").forEach(function (li) {
+      li.hidden = b.dataset.show !== "all" && li.dataset.state !== b.dataset.show;
+    });
+  });
+
   // ---- copier les accès
   $$("[data-copy]").forEach(function (b) {
     b.addEventListener("click", function () {
@@ -83,14 +94,22 @@
           if (r.value === "Non") n++;
         });
         var hasNon = n > 0;
-        if (sec.dataset.bloc === "elim") { crit = hasNon; return; }
+        var chip = document.querySelector('[data-chip="' + sec.dataset.bloc + '"]');
+        var segs = sec.querySelectorAll(".seg").length, done = sec.querySelectorAll(".seg input:checked").length;
+        if (chip) chip.className = hasNon ? "non" : done === segs ? "done" : done ? "part" : "";
+        if (sec.dataset.bloc === "elim") { crit = hasNon; sec.classList.toggle("has-non", hasNon); return; }
         oui += o; non += n;
         var s = o + n ? o / (o + n) : null;
         if (s !== null) mins.push(s);
         var badge = sec.querySelector("[data-score-for]");
         if (badge) { badge.textContent = fmt(s); badge.className = "bloc-score pill " + cls(s); }
         var obs = sec.querySelector(".obs");
-        if (obs) obs.classList.toggle("need", hasNon && !sec.querySelector("textarea[name^=constat_]").value.trim());
+        if (obs) {
+          obs.classList.toggle("need", hasNon && !sec.querySelector("textarea[name^=constat_]").value.trim());
+          if (hasNon) obs.classList.add("open");
+          var opener = sec.querySelector(".obs-open");
+          if (opener) opener.hidden = obs.classList.contains("open");
+        }
         sec.classList.toggle("has-non", hasNon);
       });
       var g = oui + non ? oui / (oui + non) : null;
@@ -98,7 +117,13 @@
         (g < seuilGlobal || Math.min.apply(null, mins) < seuilBloc) ? "À corriger" : "Conforme";
       $("#sc-global").textContent = fmt(g);
       $("#sc-global").className = cls(g);
-      $("#sc-count").textContent = answered + "/" + tot;
+      $("#sc-count").textContent = answered + "/" + tot + " réponses";
+      $("#sc-bar").style.width = (tot ? answered / tot * 100 : 0) + "%";
+      var send = $("#send-btn");
+      if (send && !send.disabled) {
+        send.textContent = answered < tot ? "Envoyer · reste " + (tot - answered) : "Envoyer ✓";
+        send.classList.toggle("ready", answered === tot);
+      }
       var st = $("#sc-statut");
       st.textContent = statut;
       st.className = "pill " + (statut === "Critique" ? "crit" : statut === "À corriger" ? "warn" : statut === "Conforme" ? "ok" : "");
@@ -179,6 +204,32 @@
     }
     form.addEventListener("submit", function () { dirty = false; try { localStorage.removeItem(key); } catch (e) { /* ignore */ } });
     window.addEventListener("beforeunload", function (e) { if (dirty) { e.preventDefault(); e.returnValue = ""; } });
+    // un clic = réponse puis défilement vers le point suivant sans réponse
+    form.addEventListener("change", function (e) {
+      var t = e.target;
+      if (t.type !== "radio" || !t.closest(".seg") || t.dataset.seen) return;
+      $$('input[name="' + t.name + '"]', form).forEach(function (r) { r.dataset.seen = "1"; });
+      if (t.value === "Non") return;  // laisser le temps d'écrire le constat
+      var items = $$(".item", form), i = items.indexOf(t.closest(".item"));
+      for (var j = i + 1; j < items.length; j++) {
+        if (!items[j].querySelector(".seg input:checked")) {
+          var y = items[j].getBoundingClientRect().top + window.scrollY - window.innerHeight * 0.35;
+          window.scrollTo({ top: y, behavior: "smooth" });
+          break;
+        }
+      }
+    });
+    $$(".seg input:checked", form).forEach(function (r) {
+      $$('input[name="' + r.name + '"]', form).forEach(function (x) { x.dataset.seen = "1"; });
+    });
+    $$(".obs-open", form).forEach(function (b) {
+      b.addEventListener("click", function () {
+        var obs = b.parentNode.querySelector(".obs");
+        obs.classList.add("open");
+        b.hidden = true;
+        obs.querySelector("textarea").focus();
+      });
+    });
     recompute();
   }
 
