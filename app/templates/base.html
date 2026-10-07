@@ -14,7 +14,7 @@
 {% set u = current_user() %}
 {% if u %}
 <header class="topbar">
-  <a class="brand" href="{{ url_for('auth.index') }}"><span class="logo">LOS</span> Checklist</a>
+  <a class="brand" href="{{ url_for('auth.index') }}"><span class="logo"><img src="{{ logo_url }}" alt="" onerror="this.parentNode.textContent='LOS'"></span> LOS Checklist</a>
   {% if u.role == 'admin' %}
   <nav class="adminnav">
     <a href="{{ url_for('admin.dashboard') }}" class="{{ 'on' if request.endpoint == 'admin.dashboard' }}">Tableau de bord</a>
