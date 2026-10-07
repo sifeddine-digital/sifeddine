@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Seuils de scoring{% endblock %}
+{% block content %}
+<h1>Paramètres de scoring</h1>
+<div class="card narrow">
+  <p class="small">Mêmes règles que la fiche : un « Non » sur un point éliminatoire ⇒ <strong>Critique</strong> ;
+  sinon <strong>À corriger</strong> si le score global est sous le seuil global ou si un bloc est sous le seuil bloc ; sinon <strong>Conforme</strong>.</p>
+  <form method="post">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Seuil minimum par bloc (%) <input type="number" name="seuil_bloc" min="1" max="100" step="1" value="{{ (seuil_bloc * 100) | round(0) | int }}"></label>
+    <label>Seuil minimum global (%) <input type="number" name="seuil_global" min="1" max="100" step="1" value="{{ (seuil_global * 100) | round(0) | int }}"></label>
+    <button class="btn primary block">Enregistrer et recalculer</button>
+  </form>
+</div>
+{% endblock %}

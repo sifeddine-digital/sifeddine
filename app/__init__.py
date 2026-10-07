@@ -1,0 +1,92 @@
+import datetime as dt
+import os
+import secrets
+
+import click
+from flask import Flask, abort, request, session
+from werkzeug.security import generate_password_hash
+
+from . import db, scoring
+
+
+def create_app(test_config=None):
+    app = Flask(__name__, instance_relative_config=True)
+    app.config.update(
+        SECRET_KEY=os.environ.get("SECRET_KEY") or _instance_secret(app),
+        DATABASE=os.environ.get("DATABASE_PATH") or os.path.join(app.instance_path, "los.sqlite3"),
+        MAX_CONTENT_LENGTH=20 * 1024 * 1024,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "0") == "1",
+        PERMANENT_SESSION_LIFETIME=dt.timedelta(days=30),
+    )
+    if test_config:
+        app.config.update(test_config)
+    os.makedirs(os.path.dirname(app.config["DATABASE"]) or ".", exist_ok=True)
+
+    app.teardown_appcontext(db.close_db)
+    with app.app_context():
+        db.init_db()
+
+    @app.before_request
+    def _csrf_protect():
+        if request.method == "POST" and not app.config.get("TESTING_NO_CSRF"):
+            token = session.get("csrf")
+            if not token or token != request.form.get("csrf"):
+                abort(400, "Jeton de sécurité invalide — rechargez la page.")
+
+    @app.context_processor
+    def _inject():
+        if "csrf" not in session:
+            session["csrf"] = secrets.token_urlsafe(32)
+        return {"csrf_token": session["csrf"], "pct": scoring.pct,
+                "week_label": scoring.week_label, "month_label": scoring.month_label}
+
+    from .auth import bp as auth_bp, current_user
+    from .terrain import bp as terrain_bp
+    from .admin import bp as admin_bp
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(terrain_bp)
+    app.register_blueprint(admin_bp)
+    app.jinja_env.globals["current_user"] = current_user
+
+    _register_cli(app)
+    return app
+
+
+def _instance_secret(app):
+    """Clé de session persistée dans instance/ si SECRET_KEY n'est pas fournie."""
+    os.makedirs(app.instance_path, exist_ok=True)
+    path = os.path.join(app.instance_path, "secret_key")
+    if not os.path.exists(path):
+        with open(path, "w") as f:
+            f.write(secrets.token_hex(32))
+        os.chmod(path, 0o600)
+    with open(path) as f:
+        return f.read().strip()
+
+
+def _register_cli(app):
+    @app.cli.command("create-admin")
+    @click.option("--email", prompt=True)
+    @click.option("--name", prompt="Nom", default="Admin")
+    @click.password_option()
+    def create_admin(email, name, password):
+        """Crée (ou réinitialise) un compte administrateur."""
+        email = email.strip().lower()
+        db.execute(
+            "INSERT INTO users(email, name, role, password_hash) VALUES (?, ?, 'admin', ?) "
+            "ON CONFLICT(email) DO UPDATE SET role='admin', active=1, password_hash=excluded.password_hash",
+            (email, name, generate_password_hash(password)))
+        click.echo(f"Administrateur prêt : {email}")
+
+    @app.cli.command("import-fiche")
+    @click.argument("path", type=click.Path(exists=True, dir_okay=False))
+    @click.option("--stations-only", is_flag=True, help="N'importe que la liste des stations.")
+    def import_fiche_cmd(path, stations_only):
+        """Importe la fiche Excel (stations + inventaire, stock et checklist)."""
+        from .importer import import_fiche
+        with open(path, "rb") as f:
+            report = import_fiche(f, with_data=not stations_only, user_id=None)
+        for line in report:
+            click.echo(line)

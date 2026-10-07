@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Checklists — {{ week_label(week) }}{% endblock %}
+{% block content %}
+<div class="pager">
+  <a class="btn ghost" href="{{ url_for('terrain.semaine', w=prev_week.isoformat()) }}" aria-label="Semaine précédente">‹</a>
+  <div class="pager-label">
+    <strong>{{ week_label(week) }}</strong>
+    {% if is_current %}<span class="tag">Semaine en cours</span>{% else %}<a class="small" href="{{ url_for('terrain.semaine') }}">Revenir à cette semaine</a>{% endif %}
+  </div>
+  <a class="btn ghost" href="{{ url_for('terrain.semaine', w=next_week.isoformat()) }}" aria-label="Semaine suivante">›</a>
+</div>
+
+<div class="progress-card">
+  <div class="progress-head"><span>Checklists envoyées</span><strong>{{ done }} / {{ total }}</strong></div>
+  <div class="bar"><i style="width: {{ (done / total * 100) if total else 0 }}%"></i></div>
+</div>
+
+{% if not items %}
+  <div class="empty">Aucune station ne vous est affectée pour l'instant.<br>Contactez votre administrateur.</div>
+{% else %}
+<input class="search" type="search" placeholder="Rechercher une station…" data-filter=".station-list li">
+{% set ns = namespace(sect=None) %}
+<ul class="station-list">
+{% for s, c in items %}
+  {% if s.secteur != ns.sect %}{% set ns.sect = s.secteur %}<li class="group">{{ s.secteur }}</li>{% endif %}
+  <li data-text="{{ (s.name ~ ' ' ~ s.ship_to ~ ' ' ~ s.territoire) | lower }}">
+    <a href="{{ url_for('terrain.checklist', station_id=s.id, week=week.isoformat()) }}">
+      <div>
+        <div class="st-name">{{ s.name }}</div>
+        <div class="muted small">{{ s.ship_to }} · {{ s.territoire }}{% if s.sup_name %} · {{ s.sup_name }}{% endif %}</div>
+      </div>
+      <div class="st-status">
+        {% if c and c.status == 'envoye' %}
+          <span class="pill {{ 'crit' if c.statut == 'Critique' else 'warn' if c.statut == 'À corriger' else 'ok' }}">{{ pct(c.score_global) or '—' }}</span>
+          <span class="small muted">{{ c.statut }}</span>
+        {% elif c %}
+          <span class="pill draft">Brouillon</span>
+        {% else %}
+          <span class="pill todo">À faire</span>
+        {% endif %}
+      </div>
+    </a>
+  </li>
+{% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

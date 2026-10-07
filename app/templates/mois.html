@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Inventaire & stock — {{ month_label(month) }}{% endblock %}
+{% block content %}
+<div class="pager">
+  <a class="btn ghost" href="{{ url_for('terrain.mois', m=prev_m.isoformat()) }}">‹</a>
+  <div class="pager-label"><strong>{{ month_label(month) }}</strong><span class="small muted">Saisie mensuelle</span></div>
+  <a class="btn ghost" href="{{ url_for('terrain.mois', m=next_m.isoformat()) }}">›</a>
+</div>
+<div class="progress-card two">
+  <div><div class="progress-head"><span>Équipements</span><strong>{{ n_inv }} / {{ items|length }}</strong></div>
+    <div class="bar"><i style="width: {{ (n_inv / items|length * 100) if items else 0 }}%"></i></div></div>
+  <div><div class="progress-head"><span>Stock</span><strong>{{ n_stk }} / {{ items|length }}</strong></div>
+    <div class="bar"><i style="width: {{ (n_stk / items|length * 100) if items else 0 }}%"></i></div></div>
+</div>
+<input class="search" type="search" placeholder="Rechercher une station…" data-filter=".station-list li">
+{% set ns = namespace(sect=None) %}
+<ul class="station-list">
+{% for s, inv, stk in items %}
+  {% if s.secteur != ns.sect %}{% set ns.sect = s.secteur %}<li class="group">{{ s.secteur }}</li>{% endif %}
+  <li data-text="{{ (s.name ~ ' ' ~ s.ship_to) | lower }}" class="row2">
+    <div>
+      <div class="st-name">{{ s.name }}</div>
+      <div class="muted small">{{ s.ship_to }} · {{ s.territoire }}</div>
+    </div>
+    <div class="twobtn">
+      <a class="pill {{ 'ok' if inv else 'todo' }}" href="{{ url_for('terrain.inventaire', station_id=s.id, month=month.isoformat()) }}">Équip. {{ '✓' if inv else '…' }}</a>
+      <a class="pill {{ ('ok' if stk.fiable == 'Oui' else 'warn') if stk else 'todo' }}" href="{{ url_for('terrain.stock', station_id=s.id, month=month.isoformat()) }}">Stock {{ '✓' if stk else '…' }}</a>
+    </div>
+  </li>
+{% endfor %}
+</ul>
+{% endblock %}

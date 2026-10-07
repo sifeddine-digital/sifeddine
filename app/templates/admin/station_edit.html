@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}{{ st.name if st else 'Nouvelle station' }}{% endblock %}
+{% block content %}
+<a class="back" href="{{ url_for('admin.stations') }}">‹ Stations</a>
+<h1>{{ st.name if st else 'Nouvelle station' }}</h1>
+<div class="card narrow">
+<form method="post">
+  <input type="hidden" name="csrf" value="{{ csrf_token }}">
+  <label>Code Ship-to <input name="ship_to" required value="{{ st.ship_to if st else '' }}" inputmode="numeric"></label>
+  <label>Nom de la station <input name="name" required value="{{ st.name if st else '' }}"></label>
+  <label>Secteur <input name="secteur" required list="secteurs" value="{{ st.secteur if st else '' }}"></label>
+  <datalist id="secteurs">{% for s in secteurs %}<option value="{{ s }}">{% endfor %}</datalist>
+  <label>Territoire <input name="territoire" value="{{ st.territoire if st else '' }}"></label>
+  <label>Superviseur
+    <select name="supervisor_id"><option value="">— Aucun —</option>
+      {% for u in sups %}<option value="{{ u.id }}" {{ 'selected' if st and st.supervisor_id == u.id }}>{{ u.name }}{{ '' if u.active else ' (inactif)' }}</option>{% endfor %}
+    </select></label>
+  <label class="check"><input type="checkbox" name="active" value="1" {{ 'checked' if not st or st.active }}> Station active (attendue chaque semaine)</label>
+  <button class="btn primary block">Enregistrer</button>
+</form>
+</div>
+{% if history %}
+<h2>Historique</h2>
+<div class="table-wrap"><table class="tbl">
+  <thead><tr><th>Semaine</th><th>État</th><th>Propreté</th><th>Service</th><th>Équip.</th><th>Affichage</th><th>HSSE</th><th>Compét.</th><th>Global</th><th>Statut</th></tr></thead>
+  {% for c, dd, sc in history %}
+  <tr><td><a href="{{ url_for('terrain.checklist', station_id=st.id, week=c.week_start) }}">{{ c.week_start }}</a></td>
+    <td>{{ 'Envoyée' if c.status == 'envoye' else 'Brouillon' }}</td>
+    {% for v in sc.blocs.values() %}<td>{{ pct(v) or '—' }}</td>{% endfor %}
+    <td><strong>{{ pct(sc.global) or '—' }}</strong></td>
+    <td><span class="pill {{ 'crit' if sc.statut == 'Critique' else 'warn' if sc.statut == 'À corriger' else 'ok' if sc.statut else '' }}">{{ sc.statut or '—' }}</span></td></tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Stations{% endblock %}
+{% block main_class %}wrap wide{% endblock %}
+{% block content %}
+<div class="titlebar">
+  <h1>Stations <span class="muted">({{ rows|length }})</span></h1>
+  <a class="btn primary" href="{{ url_for('admin.station_edit') }}">+ Nouvelle station</a>
+</div>
+<form class="filters" method="get">
+  <select name="secteur" onchange="this.form.submit()"><option value="">Tous les secteurs</option>
+    {% for s in secteurs %}<option {{ 'selected' if s == secteur }}>{{ s }}</option>{% endfor %}</select>
+  <select name="sup" onchange="this.form.submit()"><option value="">Tous les superviseurs</option>
+    <option value="none" {{ 'selected' if sup == 'none' }}>— Non assignées —</option>
+    {% for u in sups %}<option value="{{ u.id }}" {{ 'selected' if sup == u.id|string }}>{{ u.name }}</option>{% endfor %}</select>
+  <input type="search" name="q" value="{{ q }}" placeholder="Nom, code, territoire…">
+  <button class="btn ghost">Filtrer</button>
+</form>
+
+<form method="post">
+<input type="hidden" name="csrf" value="{{ csrf_token }}">
+<div class="bulkbar card">
+  <strong><span id="nsel">0</span> sélectionnée(s)</strong>
+  <select name="supervisor_id">
+    <option value="">— Retirer le superviseur —</option>
+    {% for u in sups if u.active %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+  </select>
+  <button class="btn primary" name="action" value="assign">Affecter</button>
+  <button class="btn ghost" name="action" value="activate">Activer</button>
+  <button class="btn ghost" name="action" value="deactivate">Désactiver</button>
+</div>
+<div class="table-wrap"><table class="tbl">
+  <thead><tr><th><input type="checkbox" data-check-all="ids"></th><th>Secteur</th><th>Territoire</th><th>Ship-to</th><th>Station</th><th>Superviseur</th><th>État</th><th></th></tr></thead>
+  <tbody>
+  {% for s in rows %}
+  <tr class="{{ 'inactive' if not s.active }}">
+    <td><input type="checkbox" name="ids" value="{{ s.id }}"></td>
+    <td>{{ s.secteur }}</td><td>{{ s.territoire }}</td><td>{{ s.ship_to }}</td><td><strong>{{ s.name }}</strong></td>
+    <td>{{ s.sup_name or '' }}{% if not s.sup_name %}<span class="pill todo">non assignée</span>{% endif %}</td>
+    <td>{{ 'Active' if s.active else 'Inactive' }}</td>
+    <td><a href="{{ url_for('admin.station_edit', station_id=s.id) }}">Modifier</a></td>
+  </tr>
+  {% else %}<tr><td colspan="8" class="muted">Aucune station. <a href="{{ url_for('admin.import_view') }}">Importer la fiche Excel</a></td></tr>{% endfor %}
+  </tbody>
+</table></div>
+</form>
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Importer la fiche{% endblock %}
+{% block content %}
+<h1>Importer la fiche Excel</h1>
+<div class="card narrow">
+  <p>Chargez la fiche <strong>« LOS Inventaire & Checklist »</strong> (onglets <em>Invt_Eqmt</em>, <em>Checklist</em>, <em>Invt_Stck</em>).
+  Les stations sont créées ou mises à jour par leur <strong>Code Ship-to</strong> ; les affectations superviseurs existantes sont conservées.</p>
+  <form method="post" enctype="multipart/form-data">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Fichier .xlsx <input type="file" name="fiche" accept=".xlsx,.xlsm" required></label>
+    <label class="check"><input type="checkbox" name="with_data" value="1" checked> Importer aussi les données saisies (inventaire, stock, checklists)</label>
+    <button class="btn primary block">Importer</button>
+  </form>
+  {% if report %}
+  <h2>Résultat</h2>
+  <ul>{% for line in report %}<li>{{ line }}</li>{% endfor %}</ul>
+  <a class="btn ghost" href="{{ url_for('admin.stations') }}">Voir les stations</a>
+  {% endif %}
+</div>
+{% endblock %}
