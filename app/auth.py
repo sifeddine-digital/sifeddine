@@ -5,7 +5,7 @@ from flask import (Blueprint, abort, flash, g, redirect, render_template, reques
                    session, url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from .db import execute, log, query
+from .db import execute, query
 
 bp = Blueprint("auth", __name__)
 
@@ -100,12 +100,10 @@ def login():
                 _failed.pop(k, None)
             start_session(user, request.form.get("remember"))
             execute("UPDATE users SET last_login = datetime('now') WHERE id = ?", (user["id"],))
-            log("connexion", request.remote_addr or "", user["id"])
             nxt = request.args.get("next", "")
             return redirect(nxt if nxt.startswith("/") and not nxt.startswith("//") else url_for("auth.index"))
         for k in keys:
             _failed.setdefault(k, []).append(time.time())
-        log("échec connexion", email[:120], None)
         flash("Email ou mot de passe incorrect.", "error")
     # déjà connecté (ex. l'admin veut tester un compte superviseur) : on propose de continuer
     # ou de se connecter avec un autre compte, au lieu de rediriger d'office.
@@ -138,7 +136,6 @@ def compte():
                     (generate_password_hash(new), u["id"]))
             user = query("SELECT * FROM users WHERE id = ?", (u["id"],), one=True)
             start_session(user, session.permanent)
-            log("mot de passe changé", "", u["id"])
             flash("Mot de passe enregistré ✔", "ok")
             return redirect(url_for("auth.index"))
     return render_template("compte.html", must_change=bool(u["must_change"]))

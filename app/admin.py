@@ -1,4 +1,4 @@
-"""Espace administrateur : tableau de bord, stations, superviseurs, import / export, journal, sauvegarde."""
+"""Espace administrateur : tableau de bord, stations, superviseurs, import / export, sauvegarde."""
 import datetime as dt
 import io
 import json
@@ -13,7 +13,7 @@ from werkzeug.security import generate_password_hash
 
 from . import scoring
 from .auth import admin_required, current_user, start_session
-from .db import execute, get_db, log, query, secteurs, seuils, set_setting
+from .db import execute, get_db, query, secteurs, seuils, set_setting
 from .stats import dashboard as build_dashboard, wa_number
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -53,11 +53,9 @@ def stations():
             sup_id = int(sup) if sup and sup.isdigit() else None
             _bulk("UPDATE stations SET supervisor_id = ? WHERE id IN ({})", [sup_id], ids)
             name = query("SELECT name FROM users WHERE id = ?", (sup_id,), one=True) if sup_id else None
-            log("affectation", f"{len(ids)} station(s) → {name['name'] if name else 'aucun superviseur'}")
             flash(f"{len(ids)} station(s) affectée(s).", "ok")
         elif action in ("activate", "deactivate"):
             _bulk("UPDATE stations SET active = ? WHERE id IN ({})", [1 if action == "activate" else 0], ids)
-            log("stations " + ("activées" if action == "activate" else "désactivées"), f"{len(ids)} station(s)")
             flash(f"{len(ids)} station(s) mise(s) à jour.", "ok")
         return redirect(request.full_path)
     secteur, sup, q = request.args.get("secteur", ""), request.args.get("sup", ""), request.args.get("q", "").strip()
@@ -107,7 +105,6 @@ def station_edit(station_id=None):
                     execute("INSERT INTO stations(ship_to, name, secteur, territoire, supervisor_id, active, "
                             "sort_order) VALUES (?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order),0)+1 "
                             "FROM stations))", vals)
-                log("station modifiée" if st else "station créée", f"{vals[1]} ({vals[0]})")
                 flash("Station enregistrée.", "ok")
                 return redirect(url_for("admin.stations"))
             except sqlite3.IntegrityError:
@@ -133,11 +130,9 @@ def checklist_lock(checklist_id):
         abort(404)
     if request.form.get("op") == "reopen":
         execute("UPDATE checklists SET status = 'brouillon', locked = 0 WHERE id = ?", (checklist_id,))
-        log("checklist renvoyée pour correction", f"{c['name']} — {c['week_start']}")
         flash("Checklist rouverte : le superviseur peut la corriger et la renvoyer.", "ok")
     else:
         execute("UPDATE checklists SET locked = 1 - locked WHERE id = ?", (checklist_id,))
-        log("checklist " + ("déverrouillée" if c["locked"] else "verrouillée"), f"{c['name']} — {c['week_start']}")
         flash("Verrou modifié.", "ok")
     return redirect(url_for("terrain.checklist", station_id=c["station_id"], week=c["week_start"]))
 
@@ -167,7 +162,6 @@ def users():
             if f.get("secteur"):
                 execute("UPDATE stations SET supervisor_id = ? WHERE secteur = ? AND supervisor_id IS NULL",
                         (cur.lastrowid, f["secteur"]))
-            log("compte créé", f"{name} <{email}> ({role})")
             _flash_credentials(email, password, f.get("phone"))
             return redirect(url_for("admin.user_edit", user_id=cur.lastrowid))
     week = scoring.week_start().isoformat()
@@ -211,7 +205,6 @@ def user_edit(user_id):
                     execute("UPDATE users SET name=?, email=?, phone=?, role=?, active=? WHERE id=?",
                             (f.get("name", "").strip() or u["name"], f.get("email", "").strip().lower() or u["email"],
                              f.get("phone", "").strip(), role, active, u["id"]))
-                    log("compte modifié", f"{u['name']} — rôle {role}, {'actif' if active else 'désactivé'}")
                     flash("Profil enregistré.", "ok")
                 except sqlite3.IntegrityError:
                     flash("Cet email existe déjà.", "error")
@@ -223,7 +216,6 @@ def user_edit(user_id):
                 # nouveau hash => toutes les sessions ouvertes de ce compte sont fermées
                 execute("UPDATE users SET password_hash = ?, must_change = ? WHERE id = ?",
                         (generate_password_hash(password), 0 if u["id"] == current_user()["id"] else 1, u["id"]))
-                log("mot de passe réinitialisé", u["name"])
                 if u["id"] == current_user()["id"]:
                     start_session(query("SELECT * FROM users WHERE id = ?", (u["id"],), one=True), True)
                     flash("Votre mot de passe a été changé.", "ok")
@@ -237,7 +229,6 @@ def user_edit(user_id):
                 db.execute(f"UPDATE stations SET supervisor_id = ? WHERE id IN ({','.join('?' * len(ids))})",
                            [u["id"]] + ids)
             db.commit()
-            log("affectation", f"{len(ids)} station(s) → {u['name']}")
             flash(f"{len(ids)} station(s) affectée(s) à {u['name']}.", "ok")
         return redirect(url_for("admin.user_edit", user_id=u["id"]))
     stations = query("SELECT s.*, x.name AS sup_name FROM stations s LEFT JOIN users x ON x.id = s.supervisor_id "
@@ -266,7 +257,6 @@ def import_view():
             try:
                 report = import_fiche(f.stream, with_data=bool(request.form.get("with_data")),
                                       user_id=current_user()["id"])
-                log("import fiche Excel", f.filename[:120])
                 flash("Import terminé.", "ok")
             except Exception as exc:  # fichier illisible ou mise en page différente
                 flash(f"Import impossible : {exc}", "error")
@@ -307,7 +297,6 @@ def export_download():
         name = f"LOS_Checklist_{(w_from or scoring.week_start()):%Y-%m-%d}_au_{(w_to or scoring.week_start()):%Y-%m-%d}.xlsx"
     else:
         name = f"LOS_Checklist_DernierEtat_{dt.date.today():%Y-%m-%d}.xlsx"
-    log("export Excel", f"{MODES[mode]} — {', '.join(chosen) if chosen else 'tous secteurs'}")
     return send_file(buf, as_attachment=True, download_name=name,
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
@@ -325,7 +314,6 @@ def station_fiche(station_id):
     wb.save(buf)
     buf.seek(0)
     safe = "".join(ch if ch.isalnum() else "_" for ch in st["name"]).strip("_")
-    log("export Excel", f"fiche station {st['name']}")
     return send_file(buf, as_attachment=True, download_name=f"Fiche_{safe}_{dt.date.today():%Y-%m-%d}.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
@@ -344,7 +332,6 @@ def settings():
             set_setting("seuil_bloc", b)
             set_setting("seuil_global", g)
             _rescore()
-            log("seuils modifiés", f"bloc {b:.0%}, global {g:.0%}")
             flash("Seuils enregistrés — statuts recalculés.", "ok")
         return redirect(url_for("admin.settings"))
     b, g = seuils()
@@ -367,20 +354,7 @@ def plus():
     return render_template("admin/plus.html")
 
 
-# -------------------------------------------------------- journal / sauvegarde
-@bp.route("/journal")
-@admin_required
-def journal():
-    q = request.args.get("q", "").strip()
-    sql = ("SELECT j.*, u.name, u.email FROM journal j LEFT JOIN users u ON u.id = j.user_id")
-    args = []
-    if q:
-        sql += " WHERE j.action LIKE ? OR j.detail LIKE ? OR u.name LIKE ?"
-        args = [f"%{q}%"] * 3
-    rows = query(sql + " ORDER BY j.id DESC LIMIT 300", args)
-    return render_template("admin/journal.html", rows=rows, q=q)
-
-
+# --------------------------------------------------------------- sauvegarde
 @bp.route("/sauvegarde")
 @admin_required
 def backup():
@@ -395,7 +369,6 @@ def backup():
             data = io.BytesIO(fh.read())
     finally:
         os.remove(path)
-    log("sauvegarde téléchargée")
     current_app.logger.info("Sauvegarde téléchargée par %s", current_user()["email"])
     return send_file(data, as_attachment=True, download_name=f"LOS_sauvegarde_{dt.datetime.now():%Y-%m-%d_%H%M}.sqlite3",
                      mimetype="application/octet-stream")

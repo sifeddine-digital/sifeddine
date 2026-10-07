@@ -6,7 +6,7 @@ from flask import Blueprint, abort, flash, g, redirect, render_template, request
 
 from . import scoring
 from .auth import current_user, is_admin, login_required
-from .db import execute, log, query, secteurs, seuils
+from .db import execute, query, secteurs, seuils
 from .referentiel import (BLOCS, ELIMINATOIRES, EQUIPEMENTS, EQUIPEMENTS_E1_E2, REPONSES,
                           STATUTS_RELEVE, STOCK_FREQUENCES, STOCK_METHODES, TOUS_LES_POINTS)
 
@@ -197,7 +197,6 @@ def checklist(station_id, week):
             (station_id, week.isoformat(), data["visit_date"] or None, json.dumps(data, ensure_ascii=False),
              status, sc["global"], sc["statut"], lat, lng, current_user()["id"], send))
         if send:
-            log("checklist envoyée", f"{st['name']} — {scoring.week_label(week)} — {scoring.pct(sc['global'])} {sc['statut']}")
             flash(f"✔ {st['name']} envoyée — {scoring.pct(sc['global']) or '—'} · {sc['statut'] or '—'}", "ok")
             back = week if week >= scoring.week_start() else scoring.week_start()
             return redirect(url_for("terrain.semaine", w=back.isoformat()))

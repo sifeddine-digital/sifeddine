@@ -73,14 +73,6 @@ CREATE TABLE IF NOT EXISTS stocks (
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_checklists_week ON checklists(week_start);
 CREATE INDEX IF NOT EXISTS idx_stations_sup ON stations(supervisor_id);
-CREATE TABLE IF NOT EXISTS journal (
-    id INTEGER PRIMARY KEY,
-    ts TEXT NOT NULL DEFAULT (datetime('now')),
-    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    action TEXT NOT NULL,
-    detail TEXT NOT NULL DEFAULT ''
-);
-CREATE INDEX IF NOT EXISTS idx_journal_ts ON journal(ts);
 """
 
 # Colonnes ajoutées après la première version : (table, colonne, définition).
@@ -113,16 +105,9 @@ def init_db():
             except sqlite3.OperationalError as exc:  # ajoutée entre-temps par un autre processus
                 if "duplicate column" not in str(exc):
                     raise
+    db.execute("DROP TABLE IF EXISTS journal")  # ancien journal d'activité (retiré de l'application)
     db.execute("PRAGMA journal_mode = WAL")
     db.commit()
-
-
-def log(action, detail="", user_id=None):
-    """Journal des actions sensibles (connexions, envois, affectations, exports…)."""
-    if user_id is None:
-        user = getattr(g, "user", None)
-        user_id = user["id"] if user else None
-    execute("INSERT INTO journal(user_id, action, detail) VALUES (?, ?, ?)", (user_id, action, str(detail)[:500]))
 
 
 def query(sql, args=(), one=False):
