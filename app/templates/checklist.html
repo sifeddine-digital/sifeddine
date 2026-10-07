@@ -40,9 +40,16 @@
 {% if not editable %}<div class="flash info">Lecture seule : cette semaine est clôturée{{ ' (verrouillée par l’admin)' if row and row.locked }}.</div>{% endif %}
 
 <div class="scorebar" id="scorebar" data-seuil-bloc="{{ seuil_bloc }}" data-seuil-global="{{ seuil_global }}">
-  <div><span class="muted small">Score global</span><strong id="sc-global">—</strong></div>
-  <div><span class="muted small">Réponses</span><strong id="sc-count">0/{{ 20 }}</strong></div>
-  <div><span id="sc-statut" class="pill">—</span></div>
+  <div class="sc-row">
+    <div><span class="muted small">Score</span><strong id="sc-global">—</strong></div>
+    <div class="sc-mid"><div class="bar"><i id="sc-bar" style="width:0"></i></div><span class="muted small" id="sc-count">0/20</span></div>
+    <div><span id="sc-statut" class="pill">—</span></div>
+  </div>
+  <nav class="chips" id="chips">
+    <a href="#b-elim" data-chip="elim">ÉLIM</a>
+    {% for cle, titre, items in blocs %}<a href="#b-{{ cle }}" data-chip="{{ cle }}">{{ titre.split('. ')[1].capitalize() }}</a>{% endfor %}
+    <a href="#b-synthese">Synthèse</a>
+  </nav>
 </div>
 
 <form method="post" id="ckform" data-draft-key="ck-{{ st.id }}-{{ week.isoformat() }}" novalidate>
@@ -59,7 +66,7 @@
   {% endif %}
 </div>
 
-<section class="card bloc elim" data-bloc="elim">
+<section class="card bloc elim" data-bloc="elim" id="b-elim">
   <h2>Points éliminatoires <span class="muted small">— un seul « Non » = Critique</span></h2>
   {% for code, lib in elims %}
   <div class="item"><div class="item-label">{{ lib }}</div>{{ choice(code) }}</div>
@@ -67,9 +74,9 @@
 </section>
 
 {% for cle, titre, items in blocs %}
-<section class="card bloc" data-bloc="{{ cle }}">
-  <h2>{{ titre }} <span class="bloc-score pill" data-score-for="{{ cle }}">—</span></h2>
-  {% if editable %}<button type="button" class="btn tiny ghost all-yes" data-bloc="{{ cle }}">Tout « Oui »</button>{% endif %}
+<section class="card bloc" data-bloc="{{ cle }}" id="b-{{ cle }}">
+  <h2>{{ titre }} <span class="bloc-score pill" data-score-for="{{ cle }}">—</span>
+    {% if editable %}<button type="button" class="btn tiny ghost all-yes" data-bloc="{{ cle }}">✓ Tout Oui</button>{% endif %}</h2>
   {% if cle == 'equipements' %}
     <div class="hint">Inventaire du mois :
       {% if dotes is none %}<em>non renseigné ou station sans baie</em>
@@ -88,7 +95,9 @@
     {% if prev.actions[cle] %}<p><strong>Action :</strong> {{ prev.actions[cle] }}</p>{% endif %}
   </details>
   {% endif %}
-  <div class="obs">
+  {% set has_obs = (data.constats or {}).get(cle) or (data.actions or {}).get(cle) %}
+  <button type="button" class="obs-open linkish" {{ 'hidden' if has_obs }}>+ Ajouter un constat / une action</button>
+  <div class="obs {{ 'open' if has_obs }}">
     <label>Constat <span class="req">obligatoire si « Non »</span>
       <textarea name="constat_{{ cle }}" rows="2">{{ (data.constats or {}).get(cle, '') }}</textarea></label>
     <label>Action
@@ -97,7 +106,7 @@
 </section>
 {% endfor %}
 
-<section class="card">
+<section class="card" id="b-synthese">
   <h2>Synthèse</h2>
   <label>Responsable / Échéance
     <textarea name="responsable" rows="2" placeholder="Ex. Gérant (rappel EPI) — immédiatement / Vivo Energy (réparation pont) — sous 15 jours">{{ data.responsable or '' }}</textarea></label>
@@ -109,7 +118,7 @@
 {% if editable %}
 <div class="actionbar">
   <button class="btn ghost" name="action" value="brouillon">Enregistrer</button>
-  <button class="btn primary" name="action" value="envoyer" id="send-btn">Envoyer la checklist</button>
+  <button class="btn primary" name="action" value="envoyer" id="send-btn">Envoyer</button>
 </div>
 {% endif %}
 </form>
