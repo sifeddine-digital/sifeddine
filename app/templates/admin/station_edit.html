@@ -2,7 +2,10 @@
 {% block title %}{{ st.name if st else 'Nouvelle station' }}{% endblock %}
 {% block content %}
 <a class="back" href="{{ url_for('admin.stations') }}">‹ Stations</a>
-<h1>{{ st.name if st else 'Nouvelle station' }}</h1>
+<div class="titlebar">
+  <h1>{{ st.name if st else 'Nouvelle station' }}</h1>
+  {% if st %}<a class="btn primary small" href="{{ url_for('admin.station_fiche', station_id=st.id) }}">⤓ Fiche Excel de cette station</a>{% endif %}
+</div>
 <div class="card narrow">
 <form method="post">
   <input type="hidden" name="csrf" value="{{ csrf_token }}">

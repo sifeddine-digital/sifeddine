@@ -63,10 +63,10 @@ def create_app(test_config=None):
     def _inject():
         if "csrf" not in session:
             session["csrf"] = secrets.token_urlsafe(32)
-        from .terrain import pending_count
+        from .terrain import nav_stats, pending_count
         return {"csrf_token": session["csrf"], "pct": scoring.pct, "logo_url": _logo_url(app),
                 "week_label": scoring.week_label, "month_label": scoring.month_label,
-                "pending_count": pending_count}
+                "pending_count": pending_count, "nav_stats": nav_stats}
 
     from .auth import bp as auth_bp, current_user
     from .terrain import bp as terrain_bp

@@ -50,6 +50,24 @@ def dot_state(c):
     return {"Critique": "crit", "À corriger": "warn", "Conforme": "ok"}.get(c["statut"], "ok")
 
 
+def nav_stats():
+    """Chiffres du menu latéral admin : avancement de la semaine, nombre de stations et de superviseurs."""
+    u = current_user()
+    if u is None or u["role"] != "admin":
+        return None
+    if "nav_stats" not in g:
+        week = scoring.week_start()
+        row = query("""SELECT COUNT(*) AS total,
+                SUM(EXISTS(SELECT 1 FROM checklists c WHERE c.station_id = s.id AND c.week_start = ? AND c.status = 'envoye')) AS sent
+            FROM stations s WHERE s.active = 1""", (week.isoformat(),), one=True)
+        sups = query("SELECT COUNT(*) AS n FROM users WHERE role = 'superviseur' AND active = 1", one=True)["n"]
+        total, sent = row["total"] or 0, row["sent"] or 0
+        g.nav_stats = {"week": week.isocalendar()[1], "total": total, "sent": sent, "remaining": total - sent,
+                       "ratio": sent / total if total else 0, "sups": sups,
+                       "days_left": (week + dt.timedelta(days=6) - dt.date.today()).days}
+    return g.nav_stats
+
+
 def pending_count():
     """Checklists à faire par le superviseur connecté : semaine en cours + semaine précédente non envoyées."""
     u = current_user()

@@ -13,7 +13,8 @@
 <a class="back" href="{{ url_for('terrain.semaine', w=week.isoformat()) }}">‹ Retour à la semaine</a>
 <div class="st-head">
   <h1>{{ st.name }}</h1>
-  <div class="muted">{{ st.ship_to }} · {{ st.secteur }} · {{ st.territoire }}</div>
+  <div class="muted">{{ st.ship_to }} · {{ st.secteur }} · {{ st.territoire }}
+    {% if current_user().role == 'admin' %} · <a href="{{ url_for('admin.station_fiche', station_id=st.id) }}">⤓ Fiche Excel de la station</a>{% endif %}</div>
   <div class="small"><strong>{{ week_label(week) }}</strong>
     {% if row %} · <span class="pill {{ 'ok' if row.status == 'envoye' else 'draft' }}">{{ 'Envoyée' if row.status == 'envoye' else 'Brouillon' }}</span>
       <span class="muted">maj {{ row.updated_at[:16] }}</span>{% endif %}

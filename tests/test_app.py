@@ -237,3 +237,13 @@ def test_switch_account_from_login_page(app):
     page = c.get("/semaine").get_data(as_text=True)
     assert "SHELL A" in page and "SHELL B" not in page
     assert c.get("/admin/").status_code == 403
+
+
+def test_station_fiche_excel(app):
+    c = app.test_client()
+    token = login(c, "admin@x.ma")
+    send(c, token, 1, scoring.week_start())
+    wb = export_station = openpyxl.load_workbook(io.BytesIO(c.get("/admin/stations/1/fiche.xlsx").data))
+    ck = wb["Checklist"]
+    assert ck["D3"].value == "SHELL A" and ck["D4"].value is None and ck["F3"].value == "Oui"
+    assert export_station.sheetnames[0] == "Dashboard"

@@ -5,7 +5,7 @@ from collections import defaultdict
 
 from . import scoring
 from .db import query, seuils
-from .referentiel import BLOCS, ELIMINATOIRES, LIBELLES, TOUS_LES_POINTS
+from .referentiel import BLOC_NOMS_COURTS, BLOCS, ELIMINATOIRES, LIBELLES, TOUS_LES_POINTS
 
 
 def filtered_stations(secteur=None, sup_id=None):
@@ -165,13 +165,15 @@ def dashboard(week, secteur=None, sup_id=None, trend_weeks=8):
             for (name, sid), v in by_sup.items()]
     sups.sort(key=lambda x: (x["sid"] is None, x["name"]))
 
+    kpi = summarize(rows)
     return {
+        "insights": _insights(kpi, sups, top_non),
         "sups": sups,
         "chart": trend_chart(trend),
         "compliance": (cweeks, ctable),
         "relances": relances,
         "week": week,
-        "kpi": summarize(rows),
+        "kpi": kpi,
         "by_secteur": sorted(((k, summarize(v)) for k, v in by_secteur.items()), key=lambda x: x[0]),
         "by_sup": sorted(((k[0], k[1], summarize(v)) for k, v in by_sup.items()), key=lambda x: (x[1] is None, x[0])),
         "top_non": top_non[:10],
@@ -223,3 +225,36 @@ def trend_chart(trend, width=640, height=220):
     grid = [(top + ph * (1 - g), f"{int(g * 100)} %") for g in (0, .25, .5, .75, 1)]
     return {"w": width, "h": height, "left": left, "right": width - right, "top": top, "bottom": top + ph,
             "series": series, "cols": cols, "grid": grid}
+
+
+def _insights(kpi, sups, top_non):
+    """Les 3–4 phrases à lire en premier sur le tableau de bord."""
+    out = []
+    real = [x for x in sups if x["sid"] and x["g"]["stations"]]
+    late = [x for x in real if x["g"]["envoyees"] < x["g"]["stations"]]
+    if late:
+        w = min(late, key=lambda x: (x["g"]["completion"] or 0, x["g"]["envoyees"] - x["g"]["stations"]))
+        out.append({"tone": "warn", "icon": "users", "label": "Superviseur le plus en retard", "value": w["name"],
+                    "detail": f"{w['g']['envoyees']}/{w['g']['stations']} checklists envoyées", "sid": w["sid"]})
+    elif real:
+        out.append({"tone": "ok", "icon": "users", "label": "Superviseurs", "value": "Tous à jour",
+                    "detail": "toutes les stations affectées sont faites"})
+    blocs = [(BLOC_NOMS_COURTS[k], v) for k, v in kpi["blocs"].items() if v is not None]
+    if blocs:
+        seuil_bloc, _ = seuils()
+        name, v = min(blocs, key=lambda x: x[1])
+        if v < seuil_bloc:
+            out.append({"tone": "crit", "icon": "grid", "label": "Bloc le plus faible", "value": name,
+                        "detail": f"score moyen {scoring.pct(v)} (seuil {scoring.pct(seuil_bloc)})"})
+        else:
+            out.append({"tone": "ok", "icon": "grid", "label": "Blocs", "value": "Tous au-dessus du seuil",
+                        "detail": f"le plus bas : {name} {scoring.pct(v)}"})
+    if top_non:
+        t = top_non[0]
+        out.append({"tone": "crit" if t["taux"] >= 0.5 else "warn", "icon": "check", "label": "Point le plus souvent en « Non »",
+                    "value": t["libelle"].split("— ", 1)[-1], "detail": f"{scoring.pct(t['taux'])} des stations ({t['non']})"})
+    orphan = next((x for x in sups if x["sid"] is None), None)
+    if orphan and orphan["g"]["stations"]:
+        out.append({"tone": "info", "icon": "station", "label": "Stations sans superviseur", "value": str(orphan["g"]["stations"]),
+                    "detail": "à affecter pour qu'elles soient suivies", "link": "stations"})
+    return out[:4]

@@ -88,8 +88,11 @@ def export_plan(mode, week=None, week_from=None, week_to=None, n_weeks=8):
         f"Dernier état de chaque station au {dt.date.today():%d/%m/%Y}"
 
 
-def build_workbook(mode="dernier", secteurs=None, sup=None, week=None, week_from=None, week_to=None, n_weeks=8):
+def build_workbook(mode="dernier", secteurs=None, sup=None, week=None, week_from=None, week_to=None, n_weeks=8,
+                   station_ids=None):
     stations = [s for s in filtered_stations(sup_id=sup) if not secteurs or s["secteur"] in secteurs]
+    if station_ids:
+        stations = [s for s in stations if s["id"] in station_ids]
     w_from, w_to, hist_weeks, label = export_plan(mode, week, week_from, week_to, n_weeks)
     rows = latest_rows(stations, w_from, w_to)
     month = scoring.month_start(w_to + dt.timedelta(days=6))
