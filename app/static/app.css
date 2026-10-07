@@ -572,3 +572,10 @@ a.insight:hover { border-color: var(--line-2); }
   .side-brand .brand-sep { display: none; }
   .side-brand .brand-text b { font-size: 1.02rem; }
 }
+
+/* ----- logo Vivo Energy (207×56) */
+.logo img { height: 30px; max-width: none; }
+.side-brand .logo, .side-brand .logo img { height: 42px; }
+.side-brand .logo img { max-width: none; }
+.login-logo img { height: 56px; max-width: none; }
+@media (max-width: 420px) { .logo img { height: 26px; } }
