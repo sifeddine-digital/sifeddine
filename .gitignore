@@ -5,3 +5,6 @@ instance/
 *.sqlite3
 *.xlsx
 .pytest_cache/
+.env
+deploy/.env
+deploy/sauvegardes/

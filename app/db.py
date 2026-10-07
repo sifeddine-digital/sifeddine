@@ -108,7 +108,11 @@ def init_db():
     db.executescript(SCHEMA)
     for table, col, ddl in MIGRATIONS:
         if col not in {r["name"] for r in db.execute(f"PRAGMA table_info({table})")}:
-            db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+            try:
+                db.execute(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}")
+            except sqlite3.OperationalError as exc:  # ajoutée entre-temps par un autre processus
+                if "duplicate column" not in str(exc):
+                    raise
     db.execute("PRAGMA journal_mode = WAL")
     db.commit()
 

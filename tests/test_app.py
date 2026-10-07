@@ -247,3 +247,33 @@ def test_station_fiche_excel(app):
     ck = wb["Checklist"]
     assert ck["D3"].value == "SHELL A" and ck["D4"].value is None and ck["F3"].value == "Oui"
     assert export_station.sheetnames[0] == "Dashboard"
+
+
+def test_every_page_renders_for_both_roles(app):
+    """Parcourt toutes les pages (admin et superviseur) avec des données : aucune ne doit planter."""
+    admin = app.test_client()
+    token = login(admin, "admin@x.ma")
+    w = scoring.week_start()
+    send(admin, token, 1, w, P1="Non", constat_proprete="Sale")
+    send(admin, token, 1, w - dt.timedelta(days=7))
+    with app.app_context():
+        execute("INSERT INTO inventaires(station_id, month, statut, baie, shsc, items) VALUES (1, ?, 'Relevé', 'Oui', 'Non', '{}')",
+                (scoring.month_start().isoformat(),))
+        sup_id = query("SELECT id FROM users WHERE email = 'sup@x.ma'", one=True)["id"]
+    m = scoring.month_start().isoformat()
+    admin_pages = ["/admin/", f"/admin/?w={w - dt.timedelta(days=7)}", "/admin/?secteur=01 - Casa Nord", "/admin/?sup=none",
+                   "/semaine", "/semaine?sup=none", "/mois", f"/checklist/1/{w}", f"/checklist/2/{w}",
+                   f"/inventaire/1/{m}", f"/stock/1/{m}", "/admin/stations", "/admin/stations/1", "/admin/stations/new",
+                   "/admin/users", f"/admin/users/{sup_id}", "/admin/import", "/admin/export", "/admin/settings",
+                   "/admin/journal", "/admin/plus", "/compte", "/login"]
+    for url in admin_pages:
+        assert admin.get(url).status_code == 200, url
+    # la fiche d'un superviseur montre bien CE superviseur (et pas l'admin connecté)
+    page = admin.get(f"/admin/users/{sup_id}").get_data(as_text=True)
+    assert 'value="sup@x.ma"' in page and 'value="admin@x.ma"' not in page
+    assert "<h1>SHELL A</h1>" in admin.get(f"/checklist/1/{w}").get_data(as_text=True)
+    sup = app.test_client()
+    login(sup, "sup@x.ma")
+    for url in ["/semaine", f"/semaine?w={w - dt.timedelta(days=7)}", "/mois", f"/checklist/1/{w}",
+                f"/checklist/1/{w - dt.timedelta(days=7)}", f"/inventaire/1/{m}", f"/stock/1/{m}", "/compte", "/login"]:
+        assert sup.get(url).status_code == 200, url
