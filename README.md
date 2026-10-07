@@ -17,7 +17,15 @@ Les règles de scoring sont celles de la fiche : % par bloc = Oui / (Oui + Non) 
 éliminatoire ⇒ **Critique**, sinon **À corriger** si global < 85 % ou un bloc < 70 %, sinon **Conforme**
 (seuils modifiables dans l'app).
 
-## Démarrage rapide (local)
+## Sur un PC Windows (le plus simple)
+
+1. Installer Python depuis [python.org](https://www.python.org/downloads/) en cochant **« Add python.exe to PATH »**.
+2. Double-cliquer sur **`lancer.bat`** : la première fois, il installe tout et demande l'email et le mot de passe admin.
+3. Le navigateur s'ouvre sur `http://localhost:8000` → se connecter → **Importer la fiche Excel**.
+
+Les données restent dans le dossier `instance\` (à sauvegarder).
+
+## Démarrage rapide (local, ligne de commande)
 
 ```bash
 python3 -m venv .venv && . .venv/bin/activate
