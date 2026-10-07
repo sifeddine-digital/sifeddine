@@ -14,6 +14,35 @@
     sel.addEventListener("change", function () { sel.form.submit(); });
   });
 
+  // ---- volets ouverts d'office sur grand écran, repliés sur téléphone
+  if (window.matchMedia("(min-width: 1000px)").matches) {
+    $$("details[data-open-desktop]").forEach(function (d) { d.open = true; });
+  }
+
+  // ---- graphique d'évolution : réticule + info-bulle (souris, doigt, clavier)
+  $$("[data-chart]").forEach(function (fig) {
+    var svg = fig.querySelector("svg"), tip = fig.querySelector(".tip"), cross = fig.querySelector(".cross");
+    var show = function (r) {
+      var cx = parseFloat(r.dataset.cx);
+      cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("visibility", "visible");
+      var box = svg.getBoundingClientRect(), scale = box.width / svg.viewBox.baseVal.width;
+      tip.innerHTML = "<b>" + r.dataset.week + "</b><i style=\"background:var(--series-1)\"></i>Complétion " + r.dataset.a +
+        "<br><i style=\"background:var(--series-2)\"></i>Score moyen " + r.dataset.b;
+      tip.hidden = false;
+      var x = Math.min(Math.max(cx * scale, 70), box.width - 70);
+      tip.style.left = x + "px";
+      tip.style.top = "-6px";
+    };
+    var hide = function () { tip.hidden = true; cross.setAttribute("visibility", "hidden"); };
+    $$(".hit", svg).forEach(function (r) {
+      r.addEventListener("mouseenter", function () { show(r); });
+      r.addEventListener("focus", function () { show(r); });
+      r.addEventListener("touchstart", function () { show(r); }, { passive: true });
+      r.addEventListener("blur", hide);
+    });
+    svg.addEventListener("mouseleave", hide);
+  });
+
   // ---- export : options selon le mode choisi
   var ef = $("#exportform");
   if (ef) {

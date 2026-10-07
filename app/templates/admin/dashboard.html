@@ -1,161 +1,243 @@
 {% extends "base.html" %}
 {% block title %}Tableau de bord — {{ week_label(week) }}{% endblock %}
 {% block main_class %}wrap wide{% endblock %}
-{% macro bar(v, cls='') -%}
-<div class="minibar {{ cls }}"><i style="width: {{ ((v or 0) * 100) | round(0) }}%"></i><span>{{ pct(v) or '—' }}</span></div>
+
+{% macro meter(v) -%}
+<div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ ((v or 0) * 100) | round(0) | int }}"><i style="width: {{ ((v or 0) * 100) | round(1) }}%"></i></div>
 {%- endmacro %}
-{% macro scorecls(v) -%}{{ '' if v is none else 'ok' if v >= seuil_global else 'warn' if v >= seuil_bloc else 'crit' }}{%- endmacro %}
+{% macro score(v) -%}
+{% if v is none %}<span class="muted">—</span>{% else %}<span class="num">{{ pct(v) }}</span>{% if v < seuil_global %}<span class="below" title="Sous le seuil global ({{ pct(seuil_global) }})">▼</span>{% endif %}{% endif %}
+{%- endmacro %}
+{% macro statuts(g) -%}
+<span class="chips-st"><span class="st crit" title="Critique"><b>⛔</b>{{ g.critique }}</span><span class="st warn" title="À corriger"><b>⚠</b>{{ g.a_corriger }}</span><span class="st ok" title="Conforme"><b>✓</b>{{ g.conforme }}</span></span>
+{%- endmacro %}
+{% macro zone(done, tot) -%}{{ 'z0' if not done else 'z3' if done >= tot else 'z2' if done * 2 >= tot else 'z1' }}{%- endmacro %}
+
 {% block content %}
-<form class="filters" method="get">
-  <div class="pager compact">
-    <a class="btn ghost" href="{{ url_for('admin.dashboard', w=prev_week.isoformat(), secteur=secteur or '', sup=sup or '') }}">‹</a>
-    <div class="pager-label"><strong>{{ week_label(week) }}</strong></div>
-    <a class="btn ghost" href="{{ url_for('admin.dashboard', w=next_week.isoformat(), secteur=secteur or '', sup=sup or '') }}">›</a>
-  </div>
-  <input type="hidden" name="w" value="{{ week.isoformat() }}">
-  <select name="secteur" data-autosubmit>
-    <option value="">Tous les secteurs</option>
-    {% for s in secteurs %}<option {{ 'selected' if s == secteur }}>{{ s }}</option>{% endfor %}
-  </select>
-  <select name="sup" data-autosubmit>
-    <option value="">Tous les superviseurs</option>
-    <option value="none" {{ 'selected' if sup == 'none' }}>— Non assignées —</option>
-    {% for u in sups %}<option value="{{ u.id }}" {{ 'selected' if sup == u.id|string }}>{{ u.name }}</option>{% endfor %}
-  </select>
-  <div class="quick-export">
-    <a class="btn primary" href="{{ url_for('admin.export_download', mode='dernier', secteurs=secteur or '', sup=sup or '') }}" title="La dernière checklist de chaque station">⤓ Excel — dernier état</a>
-    <a class="btn ghost" href="{{ url_for('admin.export_download', mode='semaine', week=week.isoformat(), secteurs=secteur or '', sup=sup or '') }}">⤓ Cette semaine</a>
-    <a class="btn ghost" href="{{ url_for('admin.export') }}">Autre période…</a>
-  </div>
-</form>
-
 {% set k = d.kpi %}
-<div class="kpis">
-  <div class="kpi"><span>Stations</span><strong>{{ k.stations }}</strong></div>
-  <div class="kpi"><span>Envoyées</span><strong>{{ k.envoyees }}</strong><em>{{ k.brouillons }} brouillon(s)</em></div>
-  <div class="kpi"><span>Complétion</span><strong>{{ pct(k.completion) or '0 %' }}</strong>{{ bar(k.completion) }}</div>
-  <div class="kpi"><span>Score moyen</span><strong class="{{ scorecls(k.score) }}">{{ pct(k.score) or '—' }}</strong></div>
-  <div class="kpi crit"><span>Critique</span><strong>{{ k.critique }}</strong></div>
-  <div class="kpi warn"><span>À corriger</span><strong>{{ k.a_corriger }}</strong></div>
-  <div class="kpi ok"><span>Conforme</span><strong>{{ k.conforme }}</strong></div>
-</div>
+{% set remaining = k.stations - k.envoyees %}
 
-<div class="grid-dash">
-  <section class="card span2">
-    <h2>Par secteur</h2>
-    <div class="table-wrap"><table class="tbl">
-      <thead><tr><th>Secteur</th><th>Stations</th><th>Complétion</th><th>Score</th>
-        {% for c in ('Propreté','Service','Équip.','Affichage','HSSE','Compét.') %}<th>{{ c }}</th>{% endfor %}
-        <th class="c-crit">Crit.</th><th class="c-warn">À corr.</th><th class="c-ok">Conf.</th></tr></thead>
+{# ------------------------------------------------------------ en-tête #}
+<header class="dash-head">
+  <div class="dh-top">
+    <h1>Tableau de bord</h1>
+    <nav class="weeknav" aria-label="Semaine">
+      <a href="{{ url_for('admin.dashboard', w=prev_week.isoformat(), secteur=secteur or '', sup=sup or '') }}" aria-label="Semaine précédente">‹</a>
+      <span>{{ week_label(week) }}{% if is_current %} <em>en cours</em>{% endif %}</span>
+      <a href="{{ url_for('admin.dashboard', w=next_week.isoformat(), secteur=secteur or '', sup=sup or '') }}" aria-label="Semaine suivante">›</a>
+    </nav>
+  </div>
+  <form class="dh-bar" method="get">
+    <input type="hidden" name="w" value="{{ week.isoformat() }}">
+    <select name="secteur" data-autosubmit aria-label="Secteur">
+      <option value="">Tous les secteurs</option>
+      {% for s in secteurs %}<option {{ 'selected' if s == secteur }}>{{ s }}</option>{% endfor %}
+    </select>
+    <select name="sup" data-autosubmit aria-label="Superviseur">
+      <option value="">Tous les superviseurs</option>
+      <option value="none" {{ 'selected' if sup == 'none' }}>— Non assignées —</option>
+      {% for u in sups %}<option value="{{ u.id }}" {{ 'selected' if sup == u.id|string }}>{{ u.name }}</option>{% endfor %}
+    </select>
+    <div class="dh-export">
+      <a class="btn primary" href="{{ url_for('admin.export_download', mode='dernier', secteurs=secteur or '', sup=sup or '') }}" title="La dernière checklist envoyée de chaque station">⤓ Excel · dernier état</a>
+      <a class="btn ghost" href="{{ url_for('admin.export') }}">Autres exports</a>
+    </div>
+  </form>
+</header>
+
+<div class="dash">
+
+  {# ------------------------------------------------ avancement (chiffre clé) #}
+  <section class="card hero c-5">
+    <div class="eyebrow">Avancement de la semaine</div>
+    <div class="hero-row">
+      <div class="hero-num">{{ pct(k.completion) or '0 %' }}</div>
+      <div class="hero-side">
+        <div><strong>{{ k.envoyees }}</strong> / {{ k.stations }} checklists envoyées</div>
+        <div class="muted">
+          {% if not remaining %}Toutes les stations sont faites ✔
+          {% else %}{{ remaining }} à faire{% if is_current %} · {% if days_left > 1 %}il reste {{ days_left }} jours{% elif days_left == 1 %}dernier jour demain{% else %}dernier jour aujourd'hui{% endif %}{% endif %}{% endif %}
+        </div>
+      </div>
+    </div>
+    {{ meter(k.completion) }}
+    <div class="hero-foot muted">{{ k.brouillons }} brouillon(s) en cours</div>
+  </section>
+
+  <div class="tiles c-7">
+    <div class="tile">
+      <span class="t-label">Score moyen</span>
+      <span class="t-value">{{ pct(k.score) or '—' }}</span>
+      <span class="t-sub">{% if k.score is not none and k.score < seuil_global %}<b class="below">▼</b> {% endif %}seuil {{ pct(seuil_global) }}</span>
+    </div>
+    <div class="tile st-crit">
+      <span class="t-label"><b class="ico">⛔</b>Critique</span>
+      <span class="t-value">{{ k.critique }}</span>
+      <span class="t-sub">point éliminatoire en « Non »</span>
+    </div>
+    <div class="tile st-warn">
+      <span class="t-label"><b class="ico">⚠</b>À corriger</span>
+      <span class="t-value">{{ k.a_corriger }}</span>
+      <span class="t-sub">sous les seuils</span>
+    </div>
+    <div class="tile st-ok">
+      <span class="t-label"><b class="ico">✓</b>Conforme</span>
+      <span class="t-value">{{ k.conforme }}</span>
+      <span class="t-sub">tout est au niveau</span>
+    </div>
+  </div>
+
+  {# ------------------------------------------------------- superviseurs #}
+  <section class="card c-7">
+    <div class="card-head">
+      <h2>Superviseurs</h2>
+      <div class="legend-z" aria-label="Légende des 8 dernières semaines">
+        <span>8 sem. :</span><i class="z z0"></i>0 %<i class="z z1"></i>&lt; 50 %<i class="z z2"></i>50–99 %<i class="z z3"></i>100 %
+      </div>
+    </div>
+    <ul class="sup-list">
+    {% for r in d.sups %}
+      <li class="sup-row">
+        <div class="sr-name">
+          <strong>{{ r.name }}</strong>
+          <span class="muted small">{{ r.g.envoyees }}/{{ r.g.stations }} cette semaine · score {{ score(r.g.score) }}</span>
+        </div>
+        <div class="sr-meter">{{ meter(r.g.completion) }}<span class="num">{{ pct(r.g.completion) or '0 %' }}</span></div>
+        <div class="sr-strip">
+          {% for w, cell in r.strip %}<i class="z {{ zone(cell[0], cell[1]) }}" title="S{{ '%02d' % w.isocalendar()[1] }} : {{ cell[0] }}/{{ cell[1] }}" aria-label="S{{ '%02d' % w.isocalendar()[1] }} : {{ cell[0] }} sur {{ cell[1] }}"></i>{% endfor %}
+        </div>
+        <div class="sr-act">
+          {% if r.relance %}<a class="btn tiny wa" target="_blank" rel="noopener" title="{{ r.relance.text }}"
+             href="https://wa.me/{{ r.relance.phone }}?text={{ r.relance.text | urlencode }}">Relancer · {{ r.relance.n }}</a>
+          {% elif r.sid and r.g.envoyees < r.g.stations %}<a class="small" href="{{ url_for('admin.user_edit', user_id=r.sid) }}" title="Ajoutez son téléphone pour pouvoir le relancer">+ téléphone</a>{% endif %}
+        </div>
+      </li>
+    {% else %}<li class="muted">Aucune station.</li>{% endfor %}
+    </ul>
+  </section>
+
+  {# ---------------------------------------------------------- à traiter #}
+  <section class="card c-5">
+    <h2>À traiter en priorité</h2>
+    <h3 class="sub"><b class="ico crit">⛔</b>Stations critiques ({{ d.critiques|length }})</h3>
+    {% for c in d.critiques %}
+      <a class="todo-row" href="{{ url_for('terrain.checklist', station_id=c.station.id, week=week.isoformat()) }}">
+        <span><strong>{{ c.station.name }}</strong><small>{{ c.elims | join(' · ') }}</small></span><span class="go">›</span>
+      </a>
+    {% else %}<p class="muted small">Aucune station critique cette semaine.</p>{% endfor %}
+
+    <h3 class="sub">Points les plus souvent en « Non »</h3>
+    {% if d.top_non %}
+    <ul class="hbars">
+      {% for t in d.top_non[:6] %}
+      <li><span class="hb-label">{{ t.libelle }}</span>
+        <span class="hb-track"><i style="width: {{ (t.taux * 100) | round(1) }}%"></i></span>
+        <span class="hb-val num">{{ pct(t.taux) }} <small class="muted">({{ t.non }})</small></span></li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted small">Aucun « Non » cette semaine.</p>{% endif %}
+  </section>
+
+  {# ------------------------------------------------------------ secteurs #}
+  <section class="card c-7">
+    <h2>Secteurs</h2>
+    <table class="tbl stack sect">
+      <thead><tr><th>Secteur</th><th>Avancement</th><th>Score</th><th>Statuts</th></tr></thead>
       <tbody>
       {% for name, g in d.by_secteur %}
-        <tr><td><a href="{{ url_for('admin.dashboard', w=week.isoformat(), secteur=name) }}">{{ name }}</a></td>
-          <td>{{ g.envoyees }}/{{ g.stations }}</td><td>{{ bar(g.completion) }}</td>
-          <td class="sc {{ scorecls(g.score) }}">{{ pct(g.score) or '—' }}</td>
-          {% for v in g.blocs.values() %}<td class="sc {{ scorecls(v) }}">{{ pct(v) or '—' }}</td>{% endfor %}
-          <td>{{ g.critique or '' }}</td><td>{{ g.a_corriger or '' }}</td><td>{{ g.conforme or '' }}</td></tr>
+        <tr>
+          <td class="cell-main"><a href="{{ url_for('admin.dashboard', w=week.isoformat(), secteur=name) }}">{{ name }}</a></td>
+          <td data-label="Avancement"><div class="cell-meter">{{ meter(g.completion) }}<span class="num">{{ g.envoyees }}/{{ g.stations }}</span></div></td>
+          <td data-label="Score">{{ score(g.score) }}</td>
+          <td data-label="Statuts">{{ statuts(g) }}</td>
+        </tr>
       {% endfor %}
       </tbody>
-    </table></div>
-  </section>
-
-  <section class="card">
-    <h2>Par superviseur <span class="muted small">— cette semaine</span></h2>
-    <div class="table-wrap"><table class="tbl">
-      <thead><tr><th>Superviseur</th><th>Faites</th><th>Complétion</th><th>Score</th></tr></thead>
-      <tbody>
-      {% for name, sid, g in d.by_sup %}
-        {% set rl = d.relances.get(sid) %}
-        <tr><td>{{ name }}{% if rl %}<br><a class="btn tiny wa" target="_blank" rel="noopener" title="{{ rl.text }}"
-                href="https://wa.me/{{ rl.phone }}?text={{ rl.text | urlencode }}">Relancer ({{ rl.n }})</a>{% endif %}</td>
-          <td>{{ g.envoyees }}/{{ g.stations }}</td><td>{{ bar(g.completion) }}</td>
-          <td class="sc {{ scorecls(g.score) }}">{{ pct(g.score) or '—' }}</td></tr>
-      {% endfor %}
-      </tbody>
-    </table></div>
-    <p class="small muted">« Relancer » ouvre WhatsApp avec la liste des stations restantes (ajoutez le téléphone du superviseur dans sa fiche).</p>
-  </section>
-
-  {% set cw, ctable = d.compliance %}
-  <section class="card span2">
-    <h2>Régularité hebdomadaire <span class="muted small">— checklists envoyées / stations, 8 dernières semaines</span></h2>
-    <div class="table-wrap"><table class="tbl compliance">
-      <thead><tr><th>Superviseur</th>{% for w in cw %}<th>S{{ '%02d' % w.isocalendar()[1] }}</th>{% endfor %}</tr></thead>
-      <tbody>
-      {% for row in ctable %}
-        <tr><td>{{ row.name }}</td>
-        {% for done, tot in row.cells %}
-          {% set r = (done / tot) if tot else 0 %}
-          <td class="cc {{ 'ok' if r >= 1 else 'warn' if r >= 0.5 else 'crit' }}">{{ done }}/{{ tot }}</td>
-        {% endfor %}</tr>
-      {% endfor %}
-      </tbody>
-    </table></div>
-  </section>
-
-  <section class="card">
-    <h2>Score moyen par bloc</h2>
-    {% for name, v in [('Propreté', k.blocs.proprete), ('Service', k.blocs.service), ('Équipements', k.blocs.equipements), ('Affichage', k.blocs.affichage), ('HSSE', k.blocs.hsse), ('Compétences', k.blocs.competences)] %}
-      <div class="hbar"><span>{{ name }}</span>{{ bar(v, scorecls(v)) }}</div>
-    {% endfor %}
-  </section>
-
-  <section class="card">
-    <h2>Évolution (8 semaines)</h2>
-    {% set maxh = 120 %}
-    <div class="trend">
-      {% for t in d.trend %}
-      <div class="tcol" title="{{ week_label(t.week) }} — complétion {{ pct(t.completion) }}, score {{ pct(t.score) or '—' }}">
-        <div class="tbars">
-          <i class="c" style="height: {{ ((t.completion or 0) * maxh) | round(0) }}px"></i>
-          <i class="s" style="height: {{ ((t.score or 0) * maxh) | round(0) }}px"></i>
-        </div>
-        <span>S{{ '%02d' % t.week.isocalendar()[1] }}</span>
-      </div>
-      {% endfor %}
-    </div>
-    <div class="legend"><span><i class="c"></i>Complétion</span><span><i class="s"></i>Score moyen</span></div>
-  </section>
-
-  <section class="card">
-    <h2>Points les plus souvent en « Non »</h2>
-    {% if d.top_non %}
-    <table class="tbl compact">
-      {% for t in d.top_non %}<tr><td>{{ t.libelle }}</td><td class="num">{{ t.non }}</td><td style="width:40%">{{ bar(t.taux, 'crit') }}</td></tr>{% endfor %}
     </table>
-    {% else %}<p class="muted">Aucun « Non » cette semaine.</p>{% endif %}
   </section>
 
-  <section class="card">
-    <h2 class="c-crit">Stations critiques ({{ d.critiques|length }})</h2>
-    {% for c in d.critiques %}
-      <div class="li"><a href="{{ url_for('terrain.checklist', station_id=c.station.id, week=week.isoformat()) }}"><strong>{{ c.station.name }}</strong></a>
-        <span class="muted small">{{ c.station.secteur }} · {{ c.station.sup_name or 'non assignée' }}</span>
-        <div class="small red">{{ c.elims | join(' · ') }}</div></div>
-    {% else %}<p class="muted">Aucune station critique.</p>{% endfor %}
+  {# ---------------------------------------------------- score par bloc #}
+  <section class="card c-5">
+    <div class="card-head">
+      <h2>Score moyen par bloc</h2>
+      <span class="muted small"><i class="tick-key"></i>seuil {{ pct(seuil_bloc) }}</span>
+    </div>
+    <ul class="hbars blocs" style="--seuil: {{ (seuil_bloc * 100) | round(1) }}%">
+      {% for name, v in [('Propreté', k.blocs.proprete), ('Service', k.blocs.service), ('Équipements', k.blocs.equipements), ('Affichage', k.blocs.affichage), ('HSSE', k.blocs.hsse), ('Compétences', k.blocs.competences)] %}
+      <li><span class="hb-label">{{ name }}</span>
+        <span class="hb-track"><i style="width: {{ ((v or 0) * 100) | round(1) }}%"></i><em class="tick"></em></span>
+        <span class="hb-val num">{% if v is none %}—{% else %}{{ pct(v) }}{% if v < seuil_bloc %} <b class="below" title="Sous le seuil">▼</b>{% endif %}{% endif %}</span></li>
+      {% endfor %}
+    </ul>
   </section>
 
-  <section class="card">
-    <h2>Non faites ({{ d.non_faites|length }})</h2>
+  {# ------------------------------------------------------------ évolution #}
+  {% set ch = d.chart %}
+  <section class="card c-7">
+    <div class="card-head">
+      <h2>Évolution sur 8 semaines</h2>
+      <div class="legend-l">{% for s in ch.series %}<span><i style="background: {{ s.color }}"></i>{{ s.label }}</span>{% endfor %}</div>
+    </div>
+    <figure class="linechart" data-chart>
+      <svg viewBox="0 0 {{ ch.w }} {{ ch.h }}" role="img" aria-label="Complétion et score moyen par semaine">
+        {% for gy, glabel in ch.grid %}
+          <line class="grid" x1="{{ ch.left }}" x2="{{ ch.right }}" y1="{{ gy }}" y2="{{ gy }}"></line>
+          <text class="axis" x="{{ ch.left - 8 }}" y="{{ gy + 4 }}" text-anchor="end">{{ glabel }}</text>
+        {% endfor %}
+        {% for c in ch.cols %}
+          <text class="axis" x="{{ c.cx }}" y="{{ ch.bottom + 20 }}" text-anchor="middle">S{{ '%02d' % c.week.isocalendar()[1] }}</text>
+        {% endfor %}
+        <line class="cross" x1="0" x2="0" y1="{{ ch.top }}" y2="{{ ch.bottom }}" visibility="hidden"></line>
+        {% for s in ch.series %}
+          {% for seg in s.segments %}<polyline class="line" points="{{ seg }}" style="stroke: {{ s.color }}"></polyline>{% endfor %}
+          {% if s.last %}
+            <circle class="dot" cx="{{ s.last[0] }}" cy="{{ s.last[1] }}" r="4.5" style="fill: {{ s.color }}"></circle>
+            <text class="endlabel" x="{{ s.last[0] + 10 }}" y="{{ s.label_y + 4 }}">{{ pct(s.last[2]) }}</text>
+          {% endif %}
+        {% endfor %}
+        {% for c in ch.cols %}
+          <rect class="hit" x="{{ c.x }}" y="{{ ch.top }}" width="{{ c.w }}" height="{{ ch.bottom - ch.top }}" tabindex="0"
+                data-cx="{{ c.cx }}" data-week="S{{ '%02d' % c.week.isocalendar()[1] }}"
+                data-a="{{ pct(c.completion) or '0 %' }} ({{ c.envoyees }}/{{ c.stations }})" data-b="{{ pct(c.score) or '—' }}"></rect>
+        {% endfor %}
+      </svg>
+      <div class="tip" hidden></div>
+    </figure>
+    <details class="tableview"><summary>Voir les valeurs</summary>
+      <table class="tbl compact"><thead><tr><th>Semaine</th><th>Envoyées</th><th>Complétion</th><th>Score moyen</th></tr></thead>
+        <tbody>{% for c in ch.cols %}<tr><td>S{{ '%02d' % c.week.isocalendar()[1] }}</td><td class="num">{{ c.envoyees }}/{{ c.stations }}</td><td class="num">{{ pct(c.completion) or '0 %' }}</td><td class="num">{{ pct(c.score) or '—' }}</td></tr>{% endfor %}</tbody>
+      </table>
+    </details>
+  </section>
+
+  {# ------------------------------------------------------------ non faites #}
+  <details class="card fold c-5" data-open-desktop>
+    <summary><h2>Stations non faites <span class="count">{{ d.non_faites|length }}</span></h2></summary>
     <div class="scroll">
     {% for s in d.non_faites %}
-      <div class="li"><a href="{{ url_for('terrain.checklist', station_id=s.id, week=week.isoformat()) }}">{{ s.name }}</a>
-        <span class="muted small">{{ s.secteur }} · {{ s.sup_name or 'non assignée' }}</span></div>
+      <a class="todo-row" href="{{ url_for('terrain.checklist', station_id=s.id, week=week.isoformat()) }}">
+        <span><strong>{{ s.name }}</strong><small>{{ s.secteur }} · {{ s.sup_name or 'non assignée' }}</small></span><span class="go">›</span>
+      </a>
     {% else %}<p class="muted">Tout est fait 🎉</p>{% endfor %}
     </div>
-  </section>
+  </details>
 
-  <section class="card span2">
-    <h2>Plan d'actions de la semaine ({{ d.actions|length }})</h2>
-    <div class="table-wrap scroll"><table class="tbl">
+  {# ---------------------------------------------------------- plan d'actions #}
+  <details class="card fold c-12" data-open-desktop>
+    <summary><h2>Plan d'actions de la semaine <span class="count">{{ d.actions|length }}</span></h2></summary>
+    {% if d.actions %}
+    <table class="tbl stack">
       <thead><tr><th>Station</th><th>Bloc</th><th>Points</th><th>Constat</th><th>Action</th><th>Responsable / Échéance</th></tr></thead>
       <tbody>
       {% for a in d.actions %}
-        <tr><td><a href="{{ url_for('terrain.checklist', station_id=a.station.id, week=week.isoformat()) }}">{{ a.station.name }}</a></td>
-          <td>{{ a.bloc }}</td><td>{{ a.points | join(', ') }}</td><td class="txt">{{ a.constat }}</td><td class="txt">{{ a.action }}</td><td class="txt">{{ a.responsable }}</td></tr>
-      {% else %}<tr><td colspan="6" class="muted">Aucune action.</td></tr>{% endfor %}
+        <tr><td class="cell-main"><a href="{{ url_for('terrain.checklist', station_id=a.station.id, week=week.isoformat()) }}">{{ a.station.name }}</a></td>
+          <td data-label="Bloc">{{ a.bloc }}</td><td data-label="Points">{{ a.points | join(', ') }}</td>
+          <td data-label="Constat" class="txt">{{ a.constat or '—' }}</td><td data-label="Action" class="txt">{{ a.action or '—' }}</td>
+          <td data-label="Responsable" class="txt">{{ a.responsable or '—' }}</td></tr>
+      {% endfor %}
       </tbody>
-    </table></div>
-  </section>
+    </table>
+    {% else %}<p class="muted">Aucune action cette semaine.</p>{% endif %}
+  </details>
 </div>
 {% endblock %}

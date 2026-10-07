@@ -22,22 +22,22 @@
 </section>
 <section class="card span2">
   <h2>Comptes</h2>
-  <div class="table-wrap"><table class="tbl">
+  <table class="tbl stack">
     <thead><tr><th>Nom</th><th>Email</th><th>Rôle</th><th>Secteur(s)</th><th>Stations</th><th>Cette semaine</th><th>Dernière connexion</th><th></th></tr></thead>
     <tbody>
     {% for u in rows %}
     <tr class="{{ 'inactive' if not u.active }}">
-      <td><strong>{{ u.name }}</strong>{% if not u.active %} <span class="pill todo">désactivé</span>{% endif %}</td>
-      <td>{{ u.email }}</td><td>{{ 'Admin' if u.role == 'admin' else 'Superviseur' }}</td>
-      <td class="small">{{ (u.secteurs or '').replace(',', ', ') }}</td>
-      <td>{{ u.n_stations }}</td>
-      <td>{% if u.n_stations %}{{ u.n_done }}/{{ u.n_stations }}{% endif %}</td>
-      <td class="small">{{ (u.last_login or 'jamais')[:16] }}</td>
-      <td><a href="{{ url_for('admin.user_edit', user_id=u.id) }}">Gérer</a></td>
+      <td class="cell-main"><strong>{{ u.name }}</strong>{% if not u.active %} <span class="pill todo">désactivé</span>{% endif %}</td>
+      <td data-label="Email">{{ u.email }}</td><td data-label="Rôle">{{ 'Admin' if u.role == 'admin' else 'Superviseur' }}</td>
+      <td data-label="Secteur(s)" class="small">{{ (u.secteurs or '—').replace(',', ', ') }}</td>
+      <td data-label="Stations">{{ u.n_stations }}</td>
+      <td data-label="Cette semaine">{% if u.n_stations %}{{ u.n_done }}/{{ u.n_stations }}{% else %}—{% endif %}</td>
+      <td data-label="Dernière connexion" class="small">{{ (u.last_login or 'jamais')[:16] }}</td>
+      <td><a class="btn tiny ghost" href="{{ url_for('admin.user_edit', user_id=u.id) }}">Gérer</a></td>
     </tr>
     {% endfor %}
     </tbody>
-  </table></div>
+  </table>
 </section>
 </div>
 {% endblock %}

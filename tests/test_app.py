@@ -171,7 +171,7 @@ def test_admin_assigns_stations_and_dashboard(app):
     with app.app_context():
         assert {s["supervisor_id"] for s in query("SELECT supervisor_id FROM stations")} == {autre}
     page = c.get("/admin/").get_data(as_text=True)
-    assert "Régularité hebdomadaire" in page
+    assert "sr-strip" in page and "Avancement de la semaine" in page
     assert "https://wa.me/212612345678?text=" in page  # relance WhatsApp
     assert c.get("/admin/journal").status_code == 200
 

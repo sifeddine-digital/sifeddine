@@ -77,11 +77,8 @@
 <section class="card bloc" data-bloc="{{ cle }}" id="b-{{ cle }}">
   <h2>{{ titre }} <span class="bloc-score pill" data-score-for="{{ cle }}">—</span>
     {% if editable %}<button type="button" class="btn tiny ghost all-yes" data-bloc="{{ cle }}">✓ Tout Oui</button>{% endif %}</h2>
-  {% if cle == 'equipements' %}
-    <div class="hint">Inventaire du mois :
-      {% if dotes is none %}<em>non renseigné ou station sans baie</em>
-      {% else %}<strong>{{ dotes }}</strong> équipements dotés · <strong class="{{ 'red' if manquants }}">{{ manquants }}</strong> manquants{% endif %}
-    </div>
+  {% if cle == 'equipements' and dotes is not none %}
+    <div class="hint">Inventaire du mois : <strong>{{ dotes }}</strong> équipements dotés · <strong class="{{ 'red' if manquants }}">{{ manquants }}</strong> manquants</div>
   {% endif %}
   {% for code, lib, aide in items %}
   <div class="item" data-code="{{ code }}">
